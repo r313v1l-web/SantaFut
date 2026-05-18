@@ -51,14 +51,36 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+  listAllProfiles: () => request('/perfis'),
+  createProfileFromScratch: (data) => request('/perfis/criar-do-zero', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  updateProfileByAdmin: (id, data) => request(`/perfis/${id}/admin`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteProfile: (id) => request(`/perfis/${id}`, {
+    method: 'DELETE',
+  }),
 
-  // Jogadores
+  // Jogadores (Mantendo retrocompatibilidade de leitura)
   listPlayers: () => request('/jogadores'),
   getPlayerDetails: (id) => request(`/jogadores/${id}`),
   getPlayerStats: (id) => request(`/jogadores/${id}/estatisticas`),
-  updateFUTCardStats: (id, stats) => request(`/jogadores/${id}/stats`, {
+  updateFUTCardStats: (id, stats) => request(`/perfis/${id}/admin`, {
     method: 'PUT',
     body: JSON.stringify(stats),
+  }),
+
+  // Times
+  listTeams: () => request('/times'),
+  createTeam: (data) => request('/times', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  deleteTeam: (id) => request(`/times/${id}`, {
+    method: 'DELETE',
   }),
 
   // Jogos
@@ -71,6 +93,15 @@ export const api = {
   updateMatch: (id, data) => request(`/jogos/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
+  }),
+
+  // Confirmações de Jogo
+  listConfirmations: (matchId) => request(`/jogos/${matchId}/confirmacoes`),
+  confirmAttendance: (matchId) => request(`/jogos/${matchId}/confirmar`, {
+    method: 'POST',
+  }),
+  cancelAttendance: (matchId) => request(`/jogos/${matchId}/cancelar`, {
+    method: 'POST',
   }),
 
   // Súmula / Eventos

@@ -22,11 +22,23 @@ export default function App() {
   const [predictions, setPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [suspensions, setSuspensions] = useState([]);
+  const [times, setTimes] = useState([]);
+  const [confirmacoes, setConfirmacoes] = useState({});
 
   // Estados de modais e inputs de formulário
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchEvents, setMatchEvents] = useState([]);
+
+  // Inputs para novos times
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newTeamEscudo, setNewTeamEscudo] = useState('');
+
+  // Inputs para cadastrar perfil manual
+  const [manNome, setManNome] = useState('');
+  const [manApelido, setManApelido] = useState('');
+  const [manRole, setManRole] = useState('jogador');
+  const [manTimeId, setManTimeId] = useState('');
   
   // Inputs de Auth
   const [email, setEmail] = useState('');
@@ -91,10 +103,17 @@ export default function App() {
 
   // Monitora abas ativas para carregar dados sob demanda
   useEffect(() => {
-    if (profile && profile.aceitou_regulamento) {
+    if (profile && (profile.role === 'pendente' || profile.aceitou_regulamento)) {
       carregarDadosTab(activeTab);
     }
   }, [activeTab, profile]);
+
+  // Se o perfil for recém-carregado e for 'pendente', redireciona para a aba de partidas
+  useEffect(() => {
+    if (profile && profile.role === 'pendente') {
+      setActiveTab('sumulas');
+    }
+  }, [profile]);
 
   const fetchProfile = async () => {
     try {
@@ -114,16 +133,41 @@ export default function App() {
   };
 
   const carregarDadosTab = (tab) => {
+    // Carrega a lista de times de forma global para mapeamento
+    api.listTeams().then(setTimes).catch(console.error);
+
     if (tab === 'mural') {
       api.listPlayers().then(setPlayers);
-      api.listMatches().then(setMatches);
-    } else if (tab === 'elenco') {
+      api.listMatches().then(m => {
+        setMatches(m);
+        // Carrega confirmações dos jogos agendados
+        m.filter(x => x.status === 'agendado').forEach(jogo => {
+          api.listConfirmations(jogo.id).then(c => {
+            setConfirmacoes(prev => ({ ...prev, [jogo.id]: c }));
+          }).catch(console.error);
+        });
+      });
+    } else if (tab === 'elenco' || tab === 'treinador') {
       api.listPlayers().then(setPlayers);
     } else if (tab === 'sumulas') {
-      api.listMatches().then(setMatches);
+      api.listMatches().then(m => {
+        setMatches(m);
+        m.filter(x => x.status === 'agendado').forEach(jogo => {
+          api.listConfirmations(jogo.id).then(c => {
+            setConfirmacoes(prev => ({ ...prev, [jogo.id]: c }));
+          }).catch(console.error);
+        });
+      });
       api.listPlayers().then(setPlayers);
     } else if (tab === 'bolao') {
-      api.listMatches().then(setMatches);
+      api.listMatches().then(m => {
+        setMatches(m);
+        m.filter(x => x.status === 'agendado').forEach(jogo => {
+          api.listConfirmations(jogo.id).then(c => {
+            setConfirmacoes(prev => ({ ...prev, [jogo.id]: c }));
+          }).catch(console.error);
+        });
+      });
       api.listMyPredictions().then((data) => {
         setPredictions(data);
         const pro = {};
@@ -137,7 +181,7 @@ export default function App() {
       });
       api.getPredictionsLeaderboard().then(setLeaderboard);
     } else if (tab === 'admin') {
-      api.listPlayers().then(setPlayers);
+      api.listAllProfiles().then(setPlayers); // Admin visualiza todos os usuários (incluindo pendentes)
       api.listAllSuspensions().then(setSuspensions);
       api.listMatches().then(setMatches);
     }
@@ -324,6 +368,107 @@ export default function App() {
       carregarDadosTab('admin');
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleConfirmAttendance = async (matchId) => {
+    try {
+      await api.confirmAttendance(matchId);
+      const data = await api.listConfirmations(matchId);
+      setConfirmacoes(prev => ({ ...prev, [matchId]: data }));
+      alert("Presença confirmada!");
+    } catch (err) {
+      alert("Erro ao confirmar presença: " + err.message);
+    }
+  };
+
+  const handleCancelAttendance = async (matchId) => {
+    try {
+      await api.cancelAttendance(matchId);
+      const data = await api.listConfirmations(matchId);
+      setConfirmacoes(prev => ({ ...prev, [matchId]: data }));
+      alert("Presença cancelada.");
+    } catch (err) {
+      alert("Erro ao cancelar presença: " + err.message);
+    }
+  };
+
+  const handleCreateTeam = async (e) => {
+    e.preventDefault();
+    if (!newTeamName) {
+      alert("Preencha o nome do time!");
+      return;
+    }
+    try {
+      await api.createTeam({
+        nome: newTeamName,
+        escudo_url: newTeamEscudo || null
+      });
+      alert("Time cadastrado com sucesso!");
+      setNewTeamName('');
+      setNewTeamEscudo('');
+      carregarDadosTab('admin');
+    } catch (err) {
+      alert("Erro ao cadastrar time: " + err.message);
+    }
+  };
+
+  const handleDeleteTeam = async (id) => {
+    if (!window.confirm("Deseja deletar este time? Todos os jogadores perderão este vínculo.")) return;
+    try {
+      await api.deleteTeam(id);
+      alert("Time removido!");
+      carregarDadosTab('admin');
+    } catch (err) {
+      alert("Erro ao deletar time: " + err.message);
+    }
+  };
+
+  const handleCreateProfileFromScratch = async (e) => {
+    e.preventDefault();
+    if (!manNome) {
+      alert("Preencha o nome completo!");
+      return;
+    }
+    try {
+      await api.createProfileFromScratch({
+        nome_completo: manNome,
+        apelido: manApelido || null,
+        role: manRole,
+        time_id: manTimeId || null
+      });
+      alert("Perfil manual cadastrado com sucesso!");
+      setManNome('');
+      setManApelido('');
+      setManRole('jogador');
+      setManTimeId('');
+      carregarDadosTab('admin');
+    } catch (err) {
+      alert("Erro ao cadastrar perfil: " + err.message);
+    }
+  };
+
+  const handleUpdateProfileByAdmin = async (userId, roleVal, timeVal) => {
+    try {
+      await api.updateProfileByAdmin(userId, {
+        role: roleVal,
+        time_id: timeVal || null
+      });
+      alert("Vínculo e permissão do usuário atualizados com sucesso!");
+      carregarDadosTab('admin');
+    } catch (err) {
+      alert("Erro ao atualizar perfil: " + err.message);
+    }
+  };
+
+  const handleDeleteProfile = async (id) => {
+    if (!window.confirm("Tem certeza que deseja excluir permanentemente este perfil?")) return;
+    try {
+      await api.deleteProfile(id);
+      alert("Perfil deletado com sucesso!");
+      carregarDadosTab('admin');
+    } catch (err) {
+      alert("Erro ao deletar perfil: " + err.message);
     }
   };
 
@@ -521,7 +666,7 @@ export default function App() {
   // ==========================================
   // TELA 2: BARREIRA DO REGULAMENTO (MURAL DO BADA)
   // ==========================================
-  if (profile && !profile.aceitou_regulamento) {
+  if (profile && profile.role !== 'pendente' && !profile.aceitou_regulamento) {
     return (
       <div className="regulamento-overlay">
         <div className="regulamento-container">
@@ -596,12 +741,21 @@ export default function App() {
 
         {/* Links de abas */}
         <nav className="nav-links">
-          <button onClick={() => setActiveTab('mural')} className={`nav-btn ${activeTab === 'mural' ? 'active' : ''}`}>
-            <Trophy size={18} /> Classificação & Mural
-          </button>
-          <button onClick={() => setActiveTab('elenco')} className={`nav-btn ${activeTab === 'elenco' ? 'active' : ''}`}>
-            <Users size={18} /> Elenco & FUT Cards
-          </button>
+          {profile.role !== 'pendente' && (
+            <button onClick={() => setActiveTab('mural')} className={`nav-btn ${activeTab === 'mural' ? 'active' : ''}`}>
+              <Trophy size={18} /> Classificação & Mural
+            </button>
+          )}
+          {profile.role !== 'pendente' && (
+            <button onClick={() => setActiveTab('elenco')} className={`nav-btn ${activeTab === 'elenco' ? 'active' : ''}`}>
+              <Users size={18} /> Elenco & FUT Cards
+            </button>
+          )}
+          {profile.role === 'treinador' && (
+            <button onClick={() => setActiveTab('treinador')} className={`nav-btn ${activeTab === 'treinador' ? 'active' : ''}`}>
+              <Users size={18} /> Meus Jogadores (Treinador)
+            </button>
+          )}
           <button onClick={() => setActiveTab('sumulas')} className={`nav-btn ${activeTab === 'sumulas' ? 'active' : ''}`}>
             <Calendar size={18} /> Súmulas & Partidas
           </button>
@@ -625,6 +779,22 @@ export default function App() {
 
       {/* Área Principal de Conteúdo */}
       <main className="main-content">
+        {profile.role === 'pendente' && (
+          <div className="glass-panel" style={{ borderLeft: '4px solid var(--secondary)', background: 'rgba(255, 0, 127, 0.05)', marginBottom: '30px', padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ShieldAlert size={28} style={{ color: 'var(--secondary)' }} />
+              <div>
+                <h3 style={{ fontSize: '1.2rem', color: '#fff' }}>Cadastro Pendente de Atribuição</h3>
+                <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '4px' }}>
+                  Olá, <strong>{profile.nome_completo}</strong>! Seu cadastro foi recebido com sucesso. 
+                  Um administrador irá analisar seu perfil e atribuir seu time e cargo em breve.
+                  <br />
+                  Enquanto isso, você já pode <strong>ver o calendário de jogos, resultados anteriores e enviar palpites no Bolão</strong>! ⚽🏆
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ABA 1: MURAL & CLASSIFICAÇÃO */}
         {activeTab === 'mural' && (
@@ -771,7 +941,7 @@ export default function App() {
                     <div className="glass-panel" style={{ background: 'rgba(0,0,0,0.2)' }}>
                       <h3 style={{ marginBottom: '16px', color: 'var(--primary)' }}>Ficha Técnica & Atributos</h3>
                       
-                      {profile.role in {admin: 1, analista: 1} ? (
+                      {(profile.role === 'admin' || profile.role === 'analista' || (profile.role === 'treinador' && selectedPlayer.time_id === profile.time_id)) ? (
                         <form onSubmit={handleSaveFUTCard} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                             <div className="input-group">
@@ -846,6 +1016,44 @@ export default function App() {
           </div>
         )}
 
+        {/* ABA TREINADOR: MEUS JOGADORES */}
+        {activeTab === 'treinador' && (
+          <div>
+            <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Meus Jogadores</h1>
+                <p className="text-muted">
+                  Treinador do time: <strong style={{ color: 'var(--primary)' }}>
+                    {times.find(t => t.id === profile.time_id)?.nome || 'Sem Time Atribuído'}
+                  </strong>
+                </p>
+              </div>
+              {times.find(t => t.id === profile.time_id)?.escudo_url && (
+                <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', background: '#222', border: '1px solid var(--border-color)', padding: '4px' }}>
+                  <img src={times.find(t => t.id === profile.time_id)?.escudo_url} alt="Escudo Time" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '30px' }}>
+              {players.filter(p => p.time_id === profile.time_id && p.role === 'jogador').map(pl => (
+                <div 
+                  key={pl.id} 
+                  onClick={() => handleOpenEditStats(pl)}
+                  style={{ cursor: 'pointer', transition: '0.2s' }}
+                >
+                  <AthleteCard player={pl} />
+                </div>
+              ))}
+              {players.filter(p => p.time_id === profile.time_id && p.role === 'jogador').length === 0 && (
+                <div className="glass-panel" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
+                  <p className="text-muted">Nenhum jogador atribuído ao seu time no momento. Solicite ao administrador a vinculação dos atletas.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ABA 3: SÚMULAS & PARTIDAS */}
         {activeTab === 'sumulas' && (
           <div>
@@ -880,7 +1088,19 @@ export default function App() {
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      {match.status === 'agendado' && profile.role !== 'pendente' && (
+                        confirmacoes[match.id]?.some(c => c.jogador_id === profile.id) ? (
+                          <button onClick={() => handleCancelAttendance(match.id)} className="btn btn-danger" style={{ padding: '8px 16px' }}>
+                            Cancelar Presença
+                          </button>
+                        ) : (
+                          <button onClick={() => handleConfirmAttendance(match.id)} className="btn btn-primary" style={{ padding: '8px 16px' }}>
+                            Confirmar Presença
+                          </button>
+                        )
+                      )}
+
                       <button onClick={() => handleOpenSumula(match)} className="btn btn-secondary">
                         <FileText size={16} /> Ver Súmula / Lances
                       </button>
@@ -895,6 +1115,35 @@ export default function App() {
                       )}
                     </div>
                   </div>
+
+                  {match.status === 'agendado' && (
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Confirmados para a Partida ({confirmacoes[match.id]?.length || 0})
+                      </h4>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {confirmacoes[match.id]?.map(conf => (
+                          <div 
+                            key={conf.id} 
+                            title={conf.perfis?.nome_completo}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(57, 255, 20, 0.08)', border: '1px solid rgba(57, 255, 20, 0.2)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem' }}
+                          >
+                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', overflow: 'hidden', background: '#333' }}>
+                              <img 
+                                src={conf.perfis?.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${conf.perfis?.apelido}`} 
+                                alt="Avatar" 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                              />
+                            </div>
+                            <span style={{ color: '#fff', fontWeight: '600' }}>{conf.perfis?.apelido || conf.perfis?.nome_completo.split(' ')[0]}</span>
+                          </div>
+                        ))}
+                        {(!confirmacoes[match.id] || confirmacoes[match.id].length === 0) && (
+                          <span className="text-muted" style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>Nenhuma confirmação ainda. Seja o primeiro!</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {matches.length === 0 && (
@@ -1271,32 +1520,176 @@ export default function App() {
 
             </div>
 
-            {/* Lista Geral para Banimento Permanente */}
+            {/* Gerenciamento de Times */}
+            <div className="glass-panel" style={{ marginTop: '30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--primary)' }}>
+                <Award size={22} />
+                <h3>Gerenciar Times & Escudos</h3>
+              </div>
+              
+              <form onSubmit={handleCreateTeam} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'flex-end', marginBottom: '24px' }}>
+                <div className="input-group">
+                  <label className="input-label">Nome do Time</label>
+                  <input type="text" className="input-field" placeholder="Ex: SantaFut Principal" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} required />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">URL do Escudo/Logo</label>
+                  <input type="text" className="input-field" placeholder="Ex: https://link.com/imagem.png" value={newTeamEscudo} onChange={e => setNewTeamEscudo(e.target.value)} />
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 24px' }}>
+                  Criar Time
+                </button>
+              </form>
+
+              <h4 style={{ color: 'var(--text-muted)', marginBottom: '12px', fontSize: '0.9rem', textTransform: 'uppercase' }}>Times Cadastrados ({times.length})</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                {times.map(t => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '36px', height: '36px', borderRadius: '4px', overflow: 'hidden', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        {t.escudo_url ? (
+                          <img src={t.escudo_url} alt={t.nome} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        ) : (
+                          <Award size={18} className="text-muted" />
+                        )}
+                      </div>
+                      <strong style={{ fontSize: '1rem', color: '#fff' }}>{t.nome}</strong>
+                    </div>
+                    <button onClick={() => handleDeleteTeam(t.id)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', color: 'var(--secondary)' }}>
+                      Excluir
+                    </button>
+                  </div>
+                ))}
+                {times.length === 0 && (
+                  <p className="text-muted" style={{ gridColumn: '1 / -1', fontStyle: 'italic', fontSize: '0.9rem' }}>Nenhum time cadastrado no momento.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Cadastrar Jogador do Zero */}
+            <div className="glass-panel" style={{ marginTop: '30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--primary)' }}>
+                <Plus size={22} />
+                <h3>Cadastrar Jogador do Zero (Ficha Manual)</h3>
+              </div>
+              
+              <form onSubmit={handleCreateProfileFromScratch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
+                <div className="input-group">
+                  <label className="input-label">Nome Completo</label>
+                  <input type="text" className="input-field" placeholder="Ex: Roberto Carlos" value={manNome} onChange={e => setManNome(e.target.value)} required />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Apelido (Para o Card)</label>
+                  <input type="text" className="input-field" placeholder="Ex: Robertinho" value={manApelido} onChange={e => setManApelido(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Cargo / Role</label>
+                  <select className="input-field" value={manRole} onChange={e => setManRole(e.target.value)}>
+                    <option value="jogador">Jogador</option>
+                    <option value="treinador">Treinador</option>
+                    <option value="analista">Comissão Técnica (Analista)</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Time Vinculado</label>
+                  <select className="input-field" value={manTimeId} onChange={e => setManTimeId(e.target.value)}>
+                    <option value="">Sem Vínculo</option>
+                    {times.map(t => (
+                      <option key={t.id} value={t.id}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 24px', whiteSpace: 'nowrap' }}>
+                  Criar Ficha Manual
+                </button>
+              </form>
+            </div>
+
+            {/* Controle Geral de Perfis e Vinculação */}
             <div className="glass-panel" style={{ marginTop: '30px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', color: 'var(--secondary)' }}>
-                <UserX size={22} />
-                <h3>Banimento de Atletas (Regulamento Geral)</h3>
+                <Users size={22} />
+                <h3>Controle Geral de Perfis, Cargos e Times ({players.length})</h3>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {players.map(p => (
-                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
-                    <div>
-                      <strong>{p.nome_completo} ({p.apelido || 'Sem Apelido'})</strong>
-                      <p className="text-muted" style={{ fontSize: '0.8rem' }}>E-mail: {p.id.substring(0,8)}... | Cargo: {p.role}</p>
+                  <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', background: '#333' }}>
+                          <img src={p.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${p.apelido || p.nome_completo}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, color: '#fff' }}>
+                            {p.nome_completo} {p.apelido && <span style={{ color: 'var(--primary)' }}>({p.apelido})</span>}
+                          </h4>
+                          <span style={{ fontSize: '0.75rem', color: p.role === 'pendente' ? 'var(--secondary)' : 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>
+                            Status Atual: {p.role}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {p.id !== profile.id && (
+                          <>
+                            <button onClick={() => handleDeleteProfile(p.id)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', color: 'var(--secondary)' }}>
+                              Excluir Conta
+                            </button>
+                            <button onClick={() => handleToggleBan(p, !p.banido)} className="btn btn-danger" style={{ padding: '6px 12px', fontSize: '0.8rem', background: p.banido ? 'rgba(57, 255, 20, 0.2)' : 'rgba(255, 0, 127, 0.2)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', color: '#fff' }}>
+                              {p.banido ? 'Desbanir' : 'Banir'}
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    
-                    {p.id !== profile.id ? (
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '12px', alignItems: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '12px' }}>
+                      <div className="input-group">
+                        <label className="input-label" style={{ fontSize: '0.75rem' }}>Cargo / Permissão</label>
+                        <select 
+                          id={`role-select-${p.id}`}
+                          className="input-field" 
+                          defaultValue={p.role}
+                          style={{ padding: '6px' }}
+                        >
+                          <option value="pendente">Pendente (Aguardando Aprovação)</option>
+                          <option value="jogador">Jogador Titular / Reserva</option>
+                          <option value="treinador">Treinador Principal</option>
+                          <option value="analista">Comissão Técnica (Analista)</option>
+                          <option value="admin">Administrador Geral</option>
+                          <option value="torcedor">Torcedor</option>
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label className="input-label" style={{ fontSize: '0.75rem' }}>Time Vinculado</label>
+                        <select 
+                          id={`time-select-${p.id}`}
+                          className="input-field" 
+                          defaultValue={p.time_id || ''}
+                          style={{ padding: '6px' }}
+                        >
+                          <option value="">Sem Vínculo (Nenhum)</option>
+                          {times.map(t => (
+                            <option key={t.id} value={t.id}>{t.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       <button 
-                        onClick={() => handleToggleBan(p, true)} 
-                        className="btn btn-danger" 
-                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        onClick={() => {
+                          const roleSelect = document.getElementById(`role-select-${p.id}`);
+                          const timeSelect = document.getElementById(`time-select-${p.id}`);
+                          handleUpdateProfileByAdmin(p.id, roleSelect.value, timeSelect.value);
+                        }} 
+                        className="btn btn-primary"
+                        style={{ padding: '8px 20px', fontSize: '0.85rem' }}
                       >
-                        Banir Permanentemente
+                        Salvar Vínculo
                       </button>
-                    ) : (
-                      <span className="text-muted" style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>Você mesmo</span>
-                    )}
+                    </div>
                   </div>
                 ))}
               </div>
