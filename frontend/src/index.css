@@ -1,0 +1,567 @@
+/* ==========================================================================
+   SANTAFUT (FUTPRO) - SYSTEM DESIGN & PREMIUM DARK SPORTS STYLE
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  /* Cores Principais (Tema Escuro Esportivo Premium) */
+  --bg-main: #0c0e12;
+  --bg-surface: #141722;
+  --bg-surface-hover: #1c2130;
+  
+  --primary: #39ff14; /* Verde Neon */
+  --primary-glow: rgba(57, 255, 20, 0.4);
+  --primary-dark: #26b30c;
+  
+  --secondary: #ff007f; /* Rosa Neon para cartões vermelhos / destaques */
+  --secondary-glow: rgba(255, 0, 127, 0.4);
+  
+  --yellow-neon: #fffb00; /* Amarelo Neon */
+  --yellow-glow: rgba(255, 251, 0, 0.4);
+
+  --accent-gold: linear-gradient(135deg, #ffe066 0%, #f5b041 50%, #d35400 100%);
+  --accent-silver: linear-gradient(135deg, #e5e8e8 0%, #bdc3c7 50%, #95a5a6 100%);
+  --accent-bronze: linear-gradient(135deg, #f5cba7 0%, #dc7633 50%, #a04000 100%);
+
+  /* Texto */
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dark: #0f172a;
+
+  /* Bordas e Sombras */
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(57, 255, 20, 0.5);
+  
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 8px 16px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.5);
+  --shadow-neon: 0 0 15px var(--primary-glow);
+  
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Reset e Configurações Gerais */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(57, 255, 20, 0.03) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(255, 0, 127, 0.03) 0%, transparent 40%);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbar Customizada */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Estilos de Tipografia & Layout */
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-secondary {
+  background: linear-gradient(135deg, #ffffff 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Botões Modernos */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1px solid transparent;
+  outline: none;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--text-dark);
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
+.btn-primary:hover {
+  background: #4eff2a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(57, 255, 20, 0.6);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: var(--secondary);
+  color: var(--text-main);
+  box-shadow: 0 4px 14px var(--secondary-glow);
+}
+.btn-danger:hover {
+  background: #ff2a94;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 0, 127, 0.6);
+}
+
+.btn-disabled {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--text-muted) !important;
+  border-color: transparent !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Inputs Premium */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.input-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.input-field {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  transition: var(--transition-fast);
+  outline: none;
+}
+.input-field:focus {
+  border-color: var(--primary);
+  background: rgba(57, 255, 20, 0.02);
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.1);
+}
+
+/* Containers com Glassmorphism */
+.glass-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition-normal);
+}
+.glass-panel-interactive:hover {
+  transform: translateY(-4px);
+  border-color: rgba(57, 255, 20, 0.2);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(57, 255, 20, 0.05);
+}
+
+/* ==========================================================================
+   CARD PREMIUM ESTILO FUT (FIFA ULTIMATE TEAM)
+   ========================================================================== */
+.fut-card-container {
+  perspective: 1000px;
+}
+
+.fut-card {
+  position: relative;
+  width: 260px;
+  height: 380px;
+  background: radial-gradient(ellipse at 50% 10%, #ffe885 0%, #dbb23e 30%, #9e7915 70%, #543f06 100%);
+  border-radius: 20px;
+  padding: 20px;
+  color: #1a1505;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.4), 0 0 20px rgba(219, 178, 62, 0.3);
+  font-family: 'Outfit', sans-serif;
+  overflow: hidden;
+  transition: var(--transition-slow);
+  transform-style: preserve-3d;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Variantes de cores do FUT Card conforme papel ou destaque */
+.fut-card.role-admin {
+  background: radial-gradient(ellipse at 50% 10%, #e0e0e0 0%, #a6a6a6 30%, #595959 70%, #262626 100%);
+  color: #f8fafc;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 255, 255, 0.15);
+}
+
+.fut-card.role-analista {
+  background: radial-gradient(ellipse at 50% 10%, #85d8ff 0%, #3e98db 30%, #15559e 70%, #062b54 100%);
+  color: #f8fafc;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(62, 152, 219, 0.3);
+}
+
+.fut-card:hover {
+  transform: translateY(-10px) rotateY(5deg);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(219, 178, 62, 0.6);
+}
+
+/* Linha de reflexo (shimmer) dinâmico */
+.fut-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 45%,
+    rgba(255, 255, 255, 0.2) 48%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0.2) 52%,
+    transparent 55%
+  );
+  transform: rotate(-45deg);
+  transition: 0.8s;
+  opacity: 0.6;
+}
+.fut-card:hover::before {
+  left: 100%;
+  top: 100%;
+}
+
+/* Componentes internos do FUT Card */
+.fut-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  height: 140px;
+}
+
+.fut-rating-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: 900;
+  line-height: 1;
+}
+.fut-overall {
+  font-size: 3rem;
+  letter-spacing: -0.05em;
+}
+.fut-pos {
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.fut-avatar-box {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fut-avatar-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fut-name {
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 10px 0;
+  border-bottom: 2px solid rgba(26, 21, 5, 0.2);
+  padding-bottom: 4px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fut-card.role-admin .fut-name {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+.fut-card.role-analista .fut-name {
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+.fut-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  padding: 0 10px;
+  flex-grow: 1;
+}
+.fut-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.fut-stat-val {
+  font-weight: 900;
+}
+.fut-stat-label {
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   ESTILOS ESPECÍFICOS DOS COMPONENTES E PÁGINAS
+   ========================================================================== */
+
+/* Login / Cadastro Page */
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Mural do Regulamento Impeditivo */
+.regulamento-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 14, 0.96);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.regulamento-container {
+  width: 100%;
+  max-width: 800px;
+  background: var(--bg-surface);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: 0 0 50px rgba(57, 255, 20, 0.15);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.regulamento-scroll {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin: 20px 0;
+}
+.regulamento-scroll h3 {
+  color: var(--primary);
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+.regulamento-scroll p, .regulamento-scroll li {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+/* Gráfico de Radar SVG */
+.radar-svg {
+  filter: drop-shadow(0 0 8px var(--primary-glow));
+}
+
+/* Badges e Status */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-badge.agendado {
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(57, 255, 20, 0.2);
+}
+.status-badge.finalizado {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+.status-badge.suspenso {
+  background: rgba(255, 0, 127, 0.1);
+  color: var(--secondary);
+  border: 1px solid rgba(255, 0, 127, 0.2);
+}
+
+/* Súmula Event Line */
+.timeline-event {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-left: 2px solid var(--border-color);
+  padding-left: 20px;
+  position: relative;
+}
+.timeline-event::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-color);
+}
+.timeline-event.gol::before {
+  background: #ffffff;
+  box-shadow: 0 0 10px #ffffff;
+}
+.timeline-event.amarelo::before {
+  background: var(--yellow-neon);
+  box-shadow: 0 0 10px var(--yellow-glow);
+}
+.timeline-event.vermelho::before {
+  background: var(--secondary);
+  box-shadow: 0 0 10px var(--secondary-glow);
+}
+.timeline-event.mvp::before {
+  background: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+}
+
+/* Layout do Dashboard */
+.dash-wrapper {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 260px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  flex-shrink: 0;
+}
+.main-content {
+  flex-grow: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: var(--transition-fast);
+}
+.nav-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.03);
+}
+.nav-btn.active {
+  color: var(--text-dark);
+  background: var(--primary);
+  font-weight: 600;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+@media (max-width: 768px) {
+  .dash-wrapper {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 20px;
+  }
+  .main-content {
+    padding: 20px;
+  }
+}
