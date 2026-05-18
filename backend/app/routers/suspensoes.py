@@ -12,7 +12,7 @@ async def listar_todas_suspensoes():
     """
     Retorna a lista de todas as suspensões registradas.
     """
-    res = supabase.table("suspensoes").select("*").order("created_at", descending=True).execute()
+    res = supabase.table("suspensoes").select("*").order("created_at", desc=True).execute()
     return res.data
 
 @router.get("/jogador/{jogador_id}", response_model=List[Suspensao])

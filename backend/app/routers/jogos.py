@@ -16,7 +16,7 @@ async def listar_partidas():
     """
     Retorna a lista de todas as partidas agendadas, em andamento ou finalizadas.
     """
-    res = supabase.table("jogos").select("*").order("data_hora", descending=True).execute()
+    res = supabase.table("jogos").select("*").order("data_hora", desc=True).execute()
     return res.data
 
 @router.get("/{jogo_id}", response_model=Jogo)
