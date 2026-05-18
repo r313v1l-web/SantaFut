@@ -2,6 +2,7 @@ from fastapi import APIRouter, Header, HTTPException, Depends, status
 from app.database import supabase
 from app.schemas import Perfil, PerfilUpdate, PerfilBase
 from typing import Optional, List
+from uuid import UUID
 
 router = APIRouter(prefix="/perfis", tags=["Perfis & Autenticação"])
 
