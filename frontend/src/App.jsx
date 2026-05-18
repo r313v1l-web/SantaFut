@@ -492,6 +492,33 @@ export default function App() {
   }
 
   // ==========================================
+  // TELA DE ERRO DE CONEXÃO (API OFFLINE)
+  // ==========================================
+  if (session && !profile) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card" style={{ maxWidth: '450px', textAlign: 'center' }}>
+          <ShieldAlert size={50} style={{ color: 'var(--secondary)', margin: '0 auto 20px auto' }} />
+          <h2 className="text-gradient-secondary" style={{ fontSize: '1.8rem', marginBottom: '12px' }}>API SantaFut Offline</h2>
+          <p className="text-muted" style={{ fontSize: '0.95rem', marginBottom: '24px', lineHeight: '1.6' }}>
+            Não conseguimos nos conectar ao servidor backend do SantaFut. 
+            <br />
+            Por favor, certifique-se de que a API (FastAPI) está rodando localmente na porta 8000 ou faça o deploy na nuvem.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button onClick={fetchProfile} className="btn btn-primary" style={{ width: '100%' }}>
+              Tentar Conectar Novamente
+            </button>
+            <button onClick={handleLogout} className="btn btn-secondary" style={{ width: '100%' }}>
+              Desconectar Conta
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
   // TELA 2: BARREIRA DO REGULAMENTO (MURAL DO BADA)
   // ==========================================
   if (profile && !profile.aceitou_regulamento) {
