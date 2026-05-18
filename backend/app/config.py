@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "SantaFut API"
     VERSION: str = "1.0.0"
     
-    SUPABASE_URL: str
-    SUPABASE_KEY: str
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
     
     # Permitir carregar do arquivo .env
     model_config = SettingsConfigDict(
