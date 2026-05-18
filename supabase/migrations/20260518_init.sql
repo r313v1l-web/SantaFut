@@ -228,7 +228,7 @@ CREATE POLICY "Usuários podem atualizar seus próprios perfis" ON public.perfis
     FOR UPDATE USING (auth.uid() = id);
 
 CREATE POLICY "Admins podem atualizar qualquer perfil" ON public.perfis
-    FOR ALL USING (
+    FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM public.perfis WHERE id = auth.uid() AND role = 'admin'
         )
