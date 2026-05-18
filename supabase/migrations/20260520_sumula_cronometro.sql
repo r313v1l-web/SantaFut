@@ -47,3 +47,34 @@ CREATE POLICY "Usuarios podem deletar sua propria presenca" ON public.confirmaco
         auth.uid() = jogador_id
     );
 
+-- =======================================================
+-- 6. POLÍTICAS DE STORAGE (Bucket 'avatars')
+-- Permite upload de imagens por usuários autenticados
+-- e leitura pública para exibir escudos e fotos
+-- =======================================================
+
+-- Permitir que qualquer pessoa veja as imagens (bucket público)
+DROP POLICY IF EXISTS "Imagens publicas para leitura" ON storage.objects;
+CREATE POLICY "Imagens publicas para leitura" ON storage.objects
+    FOR SELECT USING (bucket_id = 'avatars');
+
+-- Permitir que usuários autenticados façam upload
+DROP POLICY IF EXISTS "Usuarios autenticados podem fazer upload" ON storage.objects;
+CREATE POLICY "Usuarios autenticados podem fazer upload" ON storage.objects
+    FOR INSERT WITH CHECK (
+        bucket_id = 'avatars' AND auth.role() = 'authenticated'
+    );
+
+-- Permitir que usuários autenticados atualizem suas próprias imagens
+DROP POLICY IF EXISTS "Usuarios autenticados podem atualizar imagens" ON storage.objects;
+CREATE POLICY "Usuarios autenticados podem atualizar imagens" ON storage.objects
+    FOR UPDATE USING (
+        bucket_id = 'avatars' AND auth.role() = 'authenticated'
+    );
+
+-- Permitir que usuários autenticados deletem imagens
+DROP POLICY IF EXISTS "Usuarios autenticados podem deletar imagens" ON storage.objects;
+CREATE POLICY "Usuarios autenticados podem deletar imagens" ON storage.objects
+    FOR DELETE USING (
+        bucket_id = 'avatars' AND auth.role() = 'authenticated'
+    );

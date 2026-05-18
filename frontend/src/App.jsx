@@ -519,13 +519,24 @@ export default function App() {
       alert("Preencha o nome do time!");
       return;
     }
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn?.textContent;
+    if (submitBtn) submitBtn.textContent = '⏳ Enviando...';
+    
     try {
       let escudoFinalUrl = newTeamEscudo || null;
       
       // Se um arquivo de imagem foi selecionado, faz upload para o Supabase Storage
       const fileInput = e.target.querySelector('input[type="file"]');
       if (fileInput && fileInput.files.length > 0) {
-        escudoFinalUrl = await api.uploadImage(fileInput.files[0], 'avatars', 'escudos');
+        try {
+          escudoFinalUrl = await api.uploadImage(fileInput.files[0], 'avatars', 'escudos');
+        } catch (uploadErr) {
+          alert("Erro no upload da imagem: " + uploadErr.message);
+          if (submitBtn) submitBtn.textContent = originalText;
+          return;
+        }
       }
       
       await api.createTeam({
@@ -538,7 +549,9 @@ export default function App() {
       if (fileInput) fileInput.value = '';
       carregarDadosTab('admin');
     } catch (err) {
-      alert("Erro ao cadastrar time: " + err.message);
+      alert("Erro ao cadastrar time no servidor: " + err.message);
+    } finally {
+      if (submitBtn) submitBtn.textContent = originalText;
     }
   };
 
