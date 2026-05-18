@@ -94,6 +94,9 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+  startMatch: (id) => request(`/jogos/${id}/iniciar`, {
+    method: 'POST',
+  }),
 
   // Confirmações de Jogo
   listConfirmations: (matchId) => request(`/jogos/${matchId}/confirmacoes`),

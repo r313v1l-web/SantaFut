@@ -30,6 +30,12 @@ export default function App() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [matchEvents, setMatchEvents] = useState([]);
 
+  // Estados do Calendário Interativo e Súmula Ao Vivo
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [activeLiveMatch, setActiveLiveMatch] = useState(null);
+  const [liveMinute, setLiveMinute] = useState(0);
+
   // Inputs para novos times
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamEscudo, setNewTeamEscudo] = useState('');
@@ -55,7 +61,8 @@ export default function App() {
   const [evJogadorId, setEvJogadorId] = useState('');
 
   // Inputs para nova partida
-  const [newAdv, setNewAdv] = useState('');
+  const [newTimeCasaId, setNewTimeCasaId] = useState('');
+  const [newTimeForaId, setNewTimeForaId] = useState('');
   const [newData, setNewData] = useState('');
   const [newLocal, setNewLocal] = useState('');
 
@@ -108,12 +115,31 @@ export default function App() {
     }
   }, [activeTab, profile]);
 
-  // Se o perfil for recém-carregado e for 'pendente', redireciona para a aba de partidas
+  // Se o perfil for recém-carregado e for 'pendente', redireciona para a aba de partidas / calendário
   useEffect(() => {
     if (profile && profile.role === 'pendente') {
-      setActiveTab('sumulas');
+      setActiveTab('calendario');
     }
   }, [profile]);
+
+  // Hook do Cronômetro Ticking em Tempo Real
+  useEffect(() => {
+    let interval = null;
+    if (activeLiveMatch && activeLiveMatch.status === 'em_andamento' && activeLiveMatch.inicio_cronometro) {
+      const calculateMinute = () => {
+        const diffMs = new Date() - new Date(activeLiveMatch.inicio_cronometro);
+        const mins = Math.floor(diffMs / 60000);
+        setLiveMinute(Math.min(120, Math.max(0, mins)));
+      };
+      calculateMinute();
+      interval = setInterval(calculateMinute, 5000); // Atualiza a cada 5s para máxima precisão
+    } else {
+      setLiveMinute(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeLiveMatch]);
 
   const fetchProfile = async () => {
     try {
@@ -149,7 +175,7 @@ export default function App() {
       });
     } else if (tab === 'elenco' || tab === 'treinador') {
       api.listPlayers().then(setPlayers);
-    } else if (tab === 'sumulas') {
+    } else if (tab === 'calendario') {
       api.listMatches().then(m => {
         setMatches(m);
         m.filter(x => x.status === 'agendado').forEach(jogo => {
@@ -240,18 +266,28 @@ export default function App() {
   // Operações de Jogos
   const handleCreateMatch = async (e) => {
     e.preventDefault();
+    if (!newTimeCasaId || !newTimeForaId) {
+      alert("Selecione os dois times do confronto!");
+      return;
+    }
+    if (newTimeCasaId === newTimeForaId) {
+      alert("Os times de casa e de fora não podem ser iguais!");
+      return;
+    }
     try {
       await api.createMatch({
-        adversario: newAdv,
+        time_casa_id: newTimeCasaId,
+        time_fora_id: newTimeForaId,
         data_hora: new Date(newData).toISOString(),
         local: newLocal
       });
       alert("Partida agendada com sucesso!");
-      setNewAdv('');
+      setNewTimeCasaId('');
+      setNewTimeForaId('');
       setNewData('');
       setNewLocal('');
       setSelectedMatch(null);
-      carregarDadosTab('sumulas');
+      carregarDadosTab('calendario');
     } catch (err) {
       alert(err.message);
     }
@@ -266,13 +302,96 @@ export default function App() {
       });
       alert("Placar salvo e partida finalizada! Pontos do bolão calculados.");
       setSelectedMatch(null);
-      carregarDadosTab('sumulas');
+      setActiveLiveMatch(null);
+      carregarDadosTab('calendario');
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // Operações de Súmula (Lances do Jogo)
+  const handleOpenMatchDetails = async (match) => {
+    setSelectedMatch(match);
+    setGolsPro(match.gols_pro || 0);
+    setGolsContra(match.gols_contra || 0);
+    try {
+      const confs = await api.listConfirmations(match.id);
+      setConfirmacoes(prev => ({ ...prev, [match.id]: confs }));
+      const evs = await api.listMatchEvents(match.id);
+      setMatchEvents(evs);
+    } catch (err) {
+      console.error("Erro ao carregar detalhes do jogo:", err);
+    }
+  };
+
+  const handleStartLiveMatch = async (match) => {
+    if (!window.confirm("Deseja dar o pontapé inicial e ligar o cronômetro oficial desta partida?")) return;
+    try {
+      const updated = await api.startMatch(match.id);
+      setActiveLiveMatch(updated);
+      setSelectedMatch(null); // Fecha o modal de detalhes para focar na súmula ao vivo
+      setGolsPro(0);
+      setGolsContra(0);
+      // Atualiza o estado local do jogo
+      setMatches(prev => prev.map(m => m.id === updated.id ? updated : m));
+      const evs = await api.listMatchEvents(updated.id);
+      setMatchEvents(evs);
+      alert("Cronômetro SantaFut iniciado! Súmula premium ativa.");
+    } catch (err) {
+      alert("Erro ao iniciar partida: " + err.message);
+    }
+  };
+
+  const handleAddLiveEvent = async (timeId, jogadorId, tipo, minutoVal) => {
+    if (!jogadorId) {
+      alert("Selecione um jogador!");
+      return;
+    }
+    try {
+      await api.addMatchEvent(activeLiveMatch.id, {
+        jogo_id: activeLiveMatch.id,
+        jogador_id: jogadorId,
+        time_id: timeId || null,
+        tipo_evento: tipo,
+        minuto: parseInt(minutoVal)
+      });
+      
+      // Recarrega eventos
+      const evs = await api.listMatchEvents(activeLiveMatch.id);
+      setMatchEvents(evs);
+      
+      // Atualiza o placar ao vivo no componente local de forma otimista
+      // (o backend já faz o cálculo em tempo real e atualiza os gols)
+      const updatedMatch = await api.getMatchDetails(activeLiveMatch.id);
+      setActiveLiveMatch(updatedMatch);
+      setMatches(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteLiveEvent = async (eventId) => {
+    if (!window.confirm("Deseja remover este lance da súmula?")) return;
+    try {
+      await api.deleteMatchEvent(eventId);
+      const targetMatchId = activeLiveMatch?.id || selectedMatch?.id;
+      const evs = await api.listMatchEvents(targetMatchId);
+      setMatchEvents(evs);
+      
+      // Sincroniza o placar
+      const updatedMatch = await api.getMatchDetails(targetMatchId);
+      if (activeLiveMatch) {
+        setActiveLiveMatch(updatedMatch);
+      }
+      if (selectedMatch) {
+        setSelectedMatch(updatedMatch);
+      }
+      setMatches(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Operações de Súmula (Lances do Jogo) - Retrocompatibilidade
   const handleOpenSumula = async (match) => {
     setSelectedMatch(match);
     setGolsPro(match.gols_pro);
@@ -757,8 +876,8 @@ export default function App() {
               <Users size={18} /> Meus Jogadores (Treinador)
             </button>
           )}
-          <button onClick={() => setActiveTab('sumulas')} className={`nav-btn ${activeTab === 'sumulas' ? 'active' : ''}`}>
-            <Calendar size={18} /> Súmulas & Partidas
+          <button onClick={() => setActiveTab('calendario')} className={`nav-btn ${activeTab === 'calendario' ? 'active' : ''}`}>
+            <Calendar size={18} /> Calendário de Jogos
           </button>
           <button onClick={() => setActiveTab('bolao')} className={`nav-btn ${activeTab === 'bolao' ? 'active' : ''}`}>
             <Award size={18} /> Bolão & Palpites
@@ -1055,13 +1174,13 @@ export default function App() {
           </div>
         )}
 
-        {/* ABA 3: SÚMULAS & PARTIDAS */}
-        {activeTab === 'sumulas' && (
+        {/* ABA 3: CALENDÁRIO INTERATIVO & PARTIDAS */}
+        {activeTab === 'calendario' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
               <div>
-                <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Súmulas de Jogos</h1>
-                <p className="text-muted">Cadastre novos confrontos, preencha placares e registre os lances oficiais das partidas</p>
+                <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Calendário de Partidas</h1>
+                <p className="text-muted">Acompanhe os próximos jogos agendados, confirme presença ou opere partidas ao vivo</p>
               </div>
               
               {profile.role in {admin: 1, analista: 1} && (
@@ -1074,102 +1193,239 @@ export default function App() {
               )}
             </div>
 
-            {/* Lista Geral de Partidas */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {matches.map(match => (
-                <div key={match.id} className="glass-panel">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                    <div>
-                      <span className={`status-badge ${match.status}`} style={{ marginBottom: '8px' }}>
-                        {match.status}
-                      </span>
-                      <h2 style={{ fontSize: '1.6rem' }}>SantaFut {match.gols_pro} vs {match.gols_contra} {match.adversario}</h2>
-                      <p className="text-muted" style={{ fontSize: '0.9rem', marginTop: '4px' }}>
-                        {new Date(match.data_hora).toLocaleString('pt-BR')} | {match.local}
-                      </p>
-                    </div>
+            {/* Calendário Mensal Interativo */}
+            <div className="calendar-container">
+              <div className="calendar-header">
+                <button 
+                  onClick={() => {
+                    if (currentMonth === 0) {
+                      setCurrentMonth(11);
+                      setCurrentYear(prev => prev - 1);
+                    } else {
+                      setCurrentMonth(prev => prev - 1);
+                    }
+                  }} 
+                  className="calendar-nav-btn"
+                >
+                  ◀ Mês Anterior
+                </button>
+                <h2 style={{ fontSize: '1.6rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"][currentMonth]} {currentYear}
+                </h2>
+                <button 
+                  onClick={() => {
+                    if (currentMonth === 11) {
+                      setCurrentMonth(0);
+                      setCurrentYear(prev => prev + 1);
+                    } else {
+                      setCurrentMonth(prev => prev + 1);
+                    }
+                  }} 
+                  className="calendar-nav-btn"
+                >
+                  Próximo Mês ▶
+                </button>
+              </div>
 
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                      {match.status === 'agendado' && profile.role !== 'pendente' && (
-                        confirmacoes[match.id]?.some(c => c.jogador_id === profile.id) ? (
-                          <button onClick={() => handleCancelAttendance(match.id)} className="btn btn-danger" style={{ padding: '8px 16px' }}>
-                            Cancelar Presença
-                          </button>
-                        ) : (
-                          <button onClick={() => handleConfirmAttendance(match.id)} className="btn btn-primary" style={{ padding: '8px 16px' }}>
-                            Confirmar Presença
-                          </button>
-                        )
-                      )}
+              <div className="calendar-weekdays">
+                {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
+                  <div key={d}>{d}</div>
+                ))}
+              </div>
 
-                      <button onClick={() => handleOpenSumula(match)} className="btn btn-secondary">
-                        <FileText size={16} /> Ver Súmula / Lances
-                      </button>
-                      
-                      {profile.role in {admin: 1, analista: 1} && match.status !== 'finalizado' && (
-                        <button 
-                          onClick={() => { setSelectedMatch(match); setGolsPro(match.gols_pro); setGolsContra(match.gols_contra); }} 
-                          className="btn btn-primary"
-                        >
-                          Lançar Placar
-                        </button>
-                      )}
-                    </div>
-                  </div>
+              <div className="calendar-grid">
+                {(() => {
+                  const primeiroDiaIndex = new Date(currentYear, currentMonth, 1).getDay();
+                  const totalDiasMes = new Date(currentYear, currentMonth + 1, 0).getDate();
+                  const cells = [];
+                  
+                  // Slots vazios
+                  for (let i = 0; i < primeiroDiaIndex; i++) {
+                    cells.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
+                  }
+                  
+                  // Dias do mês
+                  for (let dia = 1; dia <= totalDiasMes; dia++) {
+                    const dataStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+                    const partidasDia = matches.filter(m => m.data_hora.split('T')[0] === dataStr);
+                    
+                    cells.push(
+                      <div 
+                        key={`day-${dia}`} 
+                        className={`calendar-day ${partidasDia.length > 0 ? 'has-match' : ''}`}
+                        onClick={() => {
+                          if (partidasDia.length > 0) {
+                            handleOpenMatchDetails(partidasDia[0]);
+                          }
+                        }}
+                      >
+                        <span className="day-number">{dia}</span>
+                        <div className="match-badges">
+                          {partidasDia.map(partida => {
+                            const timeC = partida.time_casa?.nome || 'SantaFut';
+                            const timeF = partida.time_fora?.nome || partida.adversario || 'Adversário';
+                            const isFinished = partida.status === 'finalizado';
+                            const isLive = partida.status === 'em_andamento';
+                            
+                            return (
+                              <div 
+                                key={partida.id} 
+                                className={`match-badge-pill ${partida.status}`}
+                                title={`${timeC} vs ${timeF}`}
+                              >
+                                {isLive ? (
+                                  <span className="live-pulse">🔴</span>
+                                ) : isFinished ? (
+                                  <span>🏆</span>
+                                ) : (
+                                  <span>⚽</span>
+                                )}
+                                <span className="match-pill-text" style={{ fontSize: '0.65rem', overflow: 'hidden' }}>
+                                  {isFinished ? `${partida.gols_pro}x${partida.gols_contra}` : `${timeC.slice(0,5)}x${timeF.slice(0,5)}`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return cells;
+                })()}
+              </div>
+            </div>
 
-                  {match.status === 'agendado' && (
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Confirmados para a Partida ({confirmacoes[match.id]?.length || 0})
-                      </h4>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {confirmacoes[match.id]?.map(conf => (
-                          <div 
-                            key={conf.id} 
-                            title={conf.perfis?.nome_completo}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(57, 255, 20, 0.08)', border: '1px solid rgba(57, 255, 20, 0.2)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem' }}
-                          >
-                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', overflow: 'hidden', background: '#333' }}>
-                              <img 
-                                src={conf.perfis?.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${conf.perfis?.apelido}`} 
-                                alt="Avatar" 
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                              />
-                            </div>
-                            <span style={{ color: '#fff', fontWeight: '600' }}>{conf.perfis?.apelido || conf.perfis?.nome_completo.split(' ')[0]}</span>
+            {/* Listagem de Próximos Confrontos e Súmulas Abaixo */}
+            <div className="glass-panel" style={{ marginTop: '20px' }}>
+              <h3 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Lista Geral de Partidas Cadastradas</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {matches.map(match => {
+                  const timeC = match.time_casa?.nome || 'SantaFut';
+                  const timeF = match.time_fora?.nome || match.adversario || 'Adversário';
+                  const shieldC = match.time_casa?.escudo_url || '';
+                  const shieldF = match.time_fora?.escudo_url || '';
+                  const isFinished = match.status === 'finalizado';
+                  const isLive = match.status === 'em_andamento';
+
+                  return (
+                    <div 
+                      key={match.id} 
+                      className="glass-panel-interactive" 
+                      style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        padding: '20px', 
+                        background: 'rgba(255,255,255,0.01)', 
+                        borderRadius: 'var(--radius-sm)', 
+                        border: isLive ? '1px solid var(--secondary)' : '1px solid var(--border-color)',
+                        flexWrap: 'wrap',
+                        gap: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        {/* Escudo Casa */}
+                        <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '4px' }}>
+                          {shieldC ? <img src={shieldC} alt="Casa" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Award size={20} className="text-muted" />}
+                        </div>
+                        
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className={`status-badge ${match.status}`}>
+                              {isLive ? '🔴 AO VIVO' : match.status}
+                            </span>
+                            <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                              {new Date(match.data_hora).toLocaleString('pt-BR')} | {match.local}
+                            </span>
                           </div>
-                        ))}
-                        {(!confirmacoes[match.id] || confirmacoes[match.id].length === 0) && (
-                          <span className="text-muted" style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>Nenhuma confirmação ainda. Seja o primeiro!</span>
+                          
+                          <h3 style={{ fontSize: '1.4rem', marginTop: '4px', color: '#fff' }}>
+                            {timeC} {isFinished || isLive ? match.gols_pro : ''} vs {isFinished || isLive ? match.gols_contra : ''} {timeF}
+                          </h3>
+                        </div>
+
+                        {/* Escudo Fora */}
+                        <div style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '4px' }}>
+                          {shieldF ? <img src={shieldF} alt="Fora" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Award size={20} className="text-muted" />}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        {match.status === 'agendado' && profile.role !== 'pendente' && (
+                          confirmacoes[match.id]?.some(c => c.jogador_id === profile.id) ? (
+                            <button onClick={() => handleCancelAttendance(match.id)} className="btn btn-danger" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+                              Cancelar Presença
+                            </button>
+                          ) : (
+                            <button onClick={() => handleConfirmAttendance(match.id)} className="btn btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+                              Confirmar Presença
+                            </button>
+                          )
+                        )}
+                        <button onClick={() => handleOpenMatchDetails(match)} className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+                          <FileText size={16} /> Ver Detalhes
+                        </button>
+                        
+                        {profile.role in {admin: 1, analista: 1} && isLive && (
+                          <button 
+                            onClick={() => {
+                              setActiveLiveMatch(match);
+                              setGolsPro(match.gols_pro);
+                              setGolsContra(match.gols_contra);
+                              api.listMatchEvents(match.id).then(setMatchEvents);
+                            }} 
+                            className="btn btn-danger"
+                            style={{ padding: '8px 16px', fontSize: '0.85rem', animation: 'pulse-border 1.5s infinite alternate' }}
+                          >
+                            Operar Súmula Ao Vivo
+                          </button>
                         )}
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
-              {matches.length === 0 && (
-                <p className="text-muted" style={{ textAlign: 'center', padding: '40px' }}>Nenhuma partida registrada até o momento.</p>
-              )}
+                  );
+                })}
+                {matches.length === 0 && (
+                  <p className="text-muted" style={{ textAlign: 'center', padding: '20px' }}>Nenhum jogo registrado até o momento.</p>
+                )}
+              </div>
             </div>
 
             {/* Modal: Agendar Novo Jogo */}
             {selectedMatch && selectedMatch.id === 'novo' && (
               <div className="regulamento-overlay">
-                <div className="regulamento-container" style={{ maxWidth: '480px' }}>
-                  <h2 style={{ marginBottom: '20px' }}>Agendar Confronto</h2>
+                <div className="regulamento-container" style={{ maxWidth: '520px' }}>
+                  <h2 style={{ marginBottom: '20px' }}>Agendar Confronto SantaFut</h2>
                   <form onSubmit={handleCreateMatch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div className="input-group">
-                      <label className="input-label">Time Adversário</label>
-                      <input type="text" className="input-field" required value={newAdv} onChange={e => setNewAdv(e.target.value)} placeholder="Ex: Badboys FC" />
+                      <label className="input-label">Time da Casa (Mandante)</label>
+                      <select className="input-field" required value={newTimeCasaId} onChange={e => setNewTimeCasaId(e.target.value)}>
+                        <option value="">Selecione o Time Casa...</option>
+                        {times.map(t => (
+                          <option key={t.id} value={t.id}>{t.nome}</option>
+                        ))}
+                      </select>
                     </div>
+
                     <div className="input-group">
-                      <label className="input-label">Data e Hora</label>
+                      <label className="input-label">Time de Fora (Visitante)</label>
+                      <select className="input-field" required value={newTimeForaId} onChange={e => setNewTimeForaId(e.target.value)}>
+                        <option value="">Selecione o Time Fora...</option>
+                        {times.map(t => (
+                          <option key={t.id} value={t.id}>{t.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="input-group">
+                      <label className="input-label">Data e Hora do Confronto</label>
                       <input type="datetime-local" className="input-field" required value={newData} onChange={e => setNewData(e.target.value)} />
                     </div>
+
                     <div className="input-group">
-                      <label className="input-label">Local de Jogo</label>
+                      <label className="input-label">Local / Estádio</label>
                       <input type="text" className="input-field" required value={newLocal} onChange={e => setNewLocal(e.target.value)} placeholder="Ex: Arena Santa Cecília" />
                     </div>
+
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
                       <button type="button" onClick={() => setSelectedMatch(null)} className="btn btn-secondary">Cancelar</button>
                       <button type="submit" className="btn btn-primary">Agendar Jogo</button>
@@ -1179,150 +1435,355 @@ export default function App() {
               </div>
             )}
 
-            {/* Modal: Lançar / Atualizar Placar Final */}
-            {selectedMatch && selectedMatch.id !== 'novo' && !matchEvents.length && (
-              <div className="regulamento-overlay">
-                <div className="regulamento-container" style={{ maxWidth: '440px' }}>
-                  <h2>Encerrar Jogo & Lançar Placar</h2>
-                  <p className="text-muted" style={{ marginBottom: '20px' }}>Confirme o placar final contra {selectedMatch.adversario}</p>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                      <div className="input-group" style={{ width: '80px', textAlign: 'center' }}>
-                        <label className="input-label">SantaFut</label>
-                        <input type="number" className="input-field" style={{ textAlign: 'center', fontSize: '1.5rem' }} value={golsPro} onChange={e => setGolsPro(e.target.value)} />
-                      </div>
-                      <span style={{ fontSize: '2rem', fontWeight: '900', marginTop: '20px' }}>VS</span>
-                      <div className="input-group" style={{ width: '80px', textAlign: 'center' }}>
-                        <label className="input-label">Adversário</label>
-                        <input type="number" className="input-field" style={{ textAlign: 'center', fontSize: '1.5rem' }} value={golsContra} onChange={e => setGolsContra(e.target.value)} />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                      <button onClick={() => setSelectedMatch(null)} className="btn btn-secondary">Cancelar</button>
-                      <button onClick={() => handleUpdateScore(selectedMatch.id)} className="btn btn-primary">Finalizar Partida</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Modal de Súmula Ativa (Registro e Visualização de Lances) */}
-            {selectedMatch && selectedMatch.id !== 'novo' && selectedMatch.adversario && (
+            {/* Modal: Detalhes do Jogo (RSVP, Súmulas, Linha do tempo, Início do Cronômetro) */}
+            {selectedMatch && selectedMatch.id !== 'novo' && (
               <div className="regulamento-overlay" style={{ background: 'rgba(8,10,14,0.95)' }}>
-                <div className="regulamento-container" style={{ maxWidth: '800px' }}>
+                <div className="regulamento-container" style={{ maxWidth: '850px', border: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '20px' }}>
                     <div>
-                      <h2>Súmula de Partida</h2>
-                      <p className="text-muted">SantaFut vs {selectedMatch.adversario} ({selectedMatch.status})</p>
+                      <h2>Confronto SantaFut</h2>
+                      <p className="text-muted">{selectedMatch.local} | {new Date(selectedMatch.data_hora).toLocaleString('pt-BR')}</p>
                     </div>
-                    <button onClick={() => setSelectedMatch(null)} className="btn btn-secondary">Fechar</button>
+                    <button onClick={() => setSelectedMatch(null)} className="btn btn-secondary">Fechar Detalhes</button>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px', overflowY: 'auto' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px', overflowY: 'auto' }}>
                     
-                    {/* Linha do Tempo de Lances do Jogo */}
+                    {/* Painel Esquerdo: Placar e Lances */}
                     <div>
-                      <h3 style={{ marginBottom: '16px' }}>Lances do Jogo</h3>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {matchEvents.map(ev => (
-                          <div key={ev.id} className={`timeline-event ${ev.tipo_evento === 'cartao_amarelo' ? 'amarelo' : ev.tipo_evento === 'cartao_vermelho' ? 'vermelho' : ev.tipo_evento === 'mvp' ? 'mvp' : 'gol'}`}>
-                            <div style={{ flexGrow: 1 }}>
-                              <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '700' }}>{ev.minuto}' min</span>
-                              <h4 style={{ textTransform: 'uppercase' }}>
-                                {ev.tipo_evento.replace('_', ' ')}
-                              </h4>
-                              <p className="text-muted" style={{ fontSize: '0.9rem' }}>
-                                {ev.perfis?.apelido || ev.perfis?.nome_completo || 'Atleta não identificado'}
-                              </p>
-                            </div>
-                            {profile.role in {admin: 1, analista: 1} && (
-                              <button onClick={() => handleDeleteEvent(ev.id)} style={{ background: 'none', border: 'none', color: 'var(--secondary)', cursor: 'pointer' }}>
-                                <Trash2 size={16} />
-                              </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '20px' }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222', borderRadius: '8px' }}>
+                            {selectedMatch.time_casa?.escudo_url ? <img src={selectedMatch.time_casa?.escudo_url} alt="Casa" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Award size={24} />}
+                          </div>
+                          <strong style={{ display: 'block', fontSize: '0.9rem' }}>{selectedMatch.time_casa?.nome || 'SantaFut'}</strong>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <span className={`status-badge ${selectedMatch.status}`} style={{ fontSize: '0.65rem', marginBottom: '4px' }}>{selectedMatch.status}</span>
+                          <span style={{ fontSize: '2rem', fontWeight: '900' }}>
+                            {selectedMatch.status === 'agendado' ? 'VS' : `${selectedMatch.gols_pro} - ${selectedMatch.gols_contra}`}
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ width: '48px', height: '48px', margin: '0 auto 8px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#222', borderRadius: '8px' }}>
+                            {selectedMatch.time_fora?.escudo_url ? <img src={selectedMatch.time_fora?.escudo_url} alt="Fora" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <Award size={24} />}
+                          </div>
+                          <strong style={{ display: 'block', fontSize: '0.9rem' }}>{selectedMatch.time_fora?.nome || selectedMatch.adversario || 'Adversário'}</strong>
+                        </div>
+                      </div>
+
+                      {/* Timeline de Lances se o jogo já ocorreu ou está rolando */}
+                      {selectedMatch.status !== 'agendado' ? (
+                        <div>
+                          <h3 style={{ marginBottom: '16px', color: 'var(--primary)' }}>Linha do Tempo (Lances)</h3>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '300px', overflowY: 'auto' }}>
+                            {matchEvents.map(ev => (
+                              <div key={ev.id} className={`timeline-event ${ev.tipo_evento === 'cartao_amarelo' ? 'amarelo' : ev.tipo_evento === 'cartao_vermelho' ? 'vermelho' : ev.tipo_evento === 'mvp' ? 'mvp' : 'gol'}`}>
+                                <div style={{ flexGrow: 1 }}>
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '700' }}>{ev.minuto}' min</span>
+                                  <h4 style={{ textTransform: 'uppercase', fontSize: '0.85rem', margin: '2px 0' }}>
+                                    {ev.tipo_evento.replace('_', ' ')}
+                                  </h4>
+                                  <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+                                    {ev.perfis?.apelido || ev.perfis?.nome_completo || 'Jogador'}
+                                  </p>
+                                </div>
+                                {profile.role in {admin: 1, analista: 1} && (
+                                  <button onClick={() => handleDeleteLiveEvent(ev.id)} style={{ background: 'none', border: 'none', color: 'var(--secondary)', cursor: 'pointer' }}>
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            {matchEvents.length === 0 && (
+                              <p className="text-muted" style={{ padding: '10px', textAlign: 'center', fontSize: '0.9rem' }}>Nenhum lance registrado ainda.</p>
                             )}
                           </div>
-                        ))}
-                        {matchEvents.length === 0 && (
-                          <p className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>Nenhum lance registrado.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Operador de Súmula (Cadastro de Lance) */}
-                    <div>
-                      <h3 style={{ marginBottom: '16px', color: 'var(--primary)' }}>Painel do Operador</h3>
-                      {profile.role in {admin: 1, analista: 1} && selectedMatch.status !== 'finalizado' ? (
-                        <form onSubmit={handleAddEvent} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                          <div className="input-group">
-                            <label className="input-label">Atleta Executor</label>
-                            <select className="input-field" value={evJogadorId} onChange={e => setEvJogadorId(e.target.value)} required>
-                              <option value="">Selecione o jogador...</option>
-                              {players.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  #{p.numero_camisa} - {p.apelido || p.nome_completo}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div className="input-group">
-                              <label className="input-label">Lance / Ação</label>
-                              <select className="input-field" value={evTipo} onChange={e => setEvTipo(e.target.value)}>
-                                <option value="gol">Gol Marcado</option>
-                                <option value="assistencia">Assistência</option>
-                                <option value="cartao_amarelo">Cartão Amarelo</option>
-                                <option value="cartao_vermelho">Cartão Vermelho</option>
-                                <option value="mvp">Jogador MVP</option>
-                              </select>
-                            </div>
-                            <div className="input-group">
-                              <label className="input-label">Minuto</label>
-                              <input type="number" className="input-field" min="0" max="120" value={evMinuto} onChange={e => setEvMinuto(e.target.value)} />
-                            </div>
-                          </div>
-
-                          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }}>
-                            <Plus size={16} /> Registrar Lance na Súmula
-                          </button>
-
-                          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '10px' }}>
-                            <h4 style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Ações de Jogo:</h4>
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                const gp = window.prompt("Digite os gols do SantaFut:", "0");
-                                const gc = window.prompt("Digite os gols do adversário:", "0");
-                                if (gp !== null && gc !== null) {
-                                  setGolsPro(gp);
-                                  setGolsContra(gc);
-                                  handleUpdateScore(selectedMatch.id);
-                                }
-                              }} 
-                              className="btn btn-danger" 
-                              style={{ width: '100%' }}
-                            >
-                              Encerrar Partida (Salvar Placar)
-                            </button>
-                          </div>
-                        </form>
+                        </div>
                       ) : (
-                        <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)' }}>
-                          <p className="text-muted">Apenas administradores e analistas podem registrar lances ao vivo. Se a partida já estiver encerrada, nenhuma alteração de lance é permitida na súmula.</p>
-                          <div style={{ marginTop: '20px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                            <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>Placar Consolidado:</h4>
-                            <p style={{ fontSize: '1.4rem', fontWeight: '900' }}>SantaFut {selectedMatch.gols_pro} - {selectedMatch.gols_contra} {selectedMatch.adversario}</p>
-                          </div>
+                        <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)', textAlign: 'center', padding: '20px' }}>
+                          <p className="text-muted">Aguardando início do jogo para registrar lances de gols e cartões na súmula.</p>
+                          {profile.role in {admin: 1, analista: 1} && (
+                            <button 
+                              onClick={() => handleStartLiveMatch(selectedMatch)} 
+                              className="btn btn-primary" 
+                              style={{ width: '100%', marginTop: '20px' }}
+                            >
+                              ▶️ Iniciar Jogo (Ativar Cronômetro)
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
 
+                    {/* Painel Direito: Confirmações / RSVPs */}
+                    <div>
+                      <h3 style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Jogadores Confirmados</span>
+                        <span style={{ fontSize: '0.9rem', color: 'var(--primary)', background: 'rgba(57, 255, 20, 0.1)', padding: '2px 8px', borderRadius: '12px' }}>
+                          {confirmacoes[selectedMatch.id]?.length || 0} Atletas
+                        </span>
+                      </h3>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '420px', overflowY: 'auto' }}>
+                        {confirmacoes[selectedMatch.id]?.map(conf => (
+                          <div 
+                            key={conf.id} 
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'space-between', 
+                              background: 'rgba(255,255,255,0.02)', 
+                              border: '1px solid var(--border-color)', 
+                              padding: '10px 14px', 
+                              borderRadius: '8px' 
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', background: '#333' }}>
+                                <img src={conf.perfis?.avatar_url || `https://api.dicebear.com/7.x/adventurer/svg?seed=${conf.perfis?.apelido}`} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                              <div>
+                                <strong style={{ color: '#fff', fontSize: '0.9rem' }}>{conf.perfis?.apelido || conf.perfis?.nome_completo.split(' ')[0]}</strong>
+                                <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--primary)' }}>
+                                  {times.find(t => t.id === conf.perfis?.time_id)?.nome || 'Sem Time'}
+                                </span>
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--text-muted)' }}>
+                              #{conf.perfis?.numero_camisa || 'S/N'}
+                            </span>
+                          </div>
+                        ))}
+                        {(!confirmacoes[selectedMatch.id] || confirmacoes[selectedMatch.id].length === 0) && (
+                          <p className="text-muted" style={{ padding: '20px', textAlign: 'center', fontSize: '0.9rem', fontStyle: 'italic' }}>Nenhuma confirmação de atleta para este jogo.</p>
+                        )}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* PAINEL PREMIUM DE SÚMULA AO VIVO COMPLETO (OVERLAY FULL SCREEN) */}
+        {activeLiveMatch && (
+          <div className="live-sumula-overlay">
+            <div className="live-sumula-container">
+              
+              {/* Header com Cronômetro, Placar e Botão de Fechar */}
+              <div className="live-sumula-header">
+                <div>
+                  <h1 style={{ fontSize: '2rem', color: '#fff' }}>SÚMULA PREMIUM AO VIVO</h1>
+                  <p className="text-muted">Minuto atual: <strong style={{ color: 'var(--secondary)' }}>{liveMinute}' min</strong> | Local: {activeLiveMatch.local}</p>
+                </div>
+
+                {/* Scoreboard Central */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '30px', background: 'rgba(0,0,0,0.3)', padding: '12px 30px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <h3 style={{ fontSize: '1.2rem', color: 'var(--primary)' }}>{activeLiveMatch.time_casa?.nome || 'SantaFut'}</h3>
+                    <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#fff' }}>{activeLiveMatch.gols_pro}</span>
+                  </div>
+                  <span style={{ fontSize: '1.8rem', fontWeight: '300', color: 'var(--text-muted)' }}>VS</span>
+                  <div style={{ textAlign: 'center' }}>
+                    <h3 style={{ fontSize: '1.2rem', color: 'var(--secondary)' }}>{activeLiveMatch.time_fora?.nome || activeLiveMatch.adversario}</h3>
+                    <span style={{ fontSize: '2.5rem', fontWeight: '900', color: '#fff' }}>{activeLiveMatch.gols_contra}</span>
+                  </div>
+                </div>
+
+                {/* Bloco do Cronômetro Oficial */}
+                <div className="live-sumula-timer">
+                  <span className="input-label" style={{ fontSize: '0.7rem' }}>Cronômetro Oficial</span>
+                  <span className="pulse-timer live">{String(liveMinute).padStart(2, '0')}:00</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--secondary)', fontWeight: '700', marginTop: '4px', textTransform: 'uppercase' }}>🔴 AO VIVO</span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    onClick={() => {
+                      setGolsPro(activeLiveMatch.gols_pro);
+                      setGolsContra(activeLiveMatch.gols_contra);
+                      handleUpdateScore(activeLiveMatch.id);
+                    }} 
+                    className="btn btn-danger"
+                    style={{ background: 'var(--secondary)', color: '#fff' }}
+                  >
+                    ⏹️ Encerrar Jogo & Salvar Placar
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setActiveLiveMatch(null);
+                      carregarDadosTab('calendario');
+                    }} 
+                    className="btn btn-secondary"
+                  >
+                    Minimizar Painel
+                  </button>
+                </div>
+              </div>
+
+              {/* Corpo de Lançamentos de Eventos Dividido por Time Casa vs Fora */}
+              <div className="live-sumula-columns">
+                
+                {/* Coluna do Time Mandante (Casa) */}
+                <div className="live-sumula-col casa">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ color: 'var(--primary)' }}>⚽ {activeLiveMatch.time_casa?.nome || 'SantaFut'} (Mandante)</h2>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Registrar ocorrência para o mandante</span>
+                  </div>
+
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const pId = e.target.jogador.value;
+                      const tipo = e.target.tipo.value;
+                      const min = e.target.minuto.value;
+                      await handleAddLiveEvent(activeLiveMatch.time_casa_id, pId, tipo, min);
+                      e.target.reset();
+                    }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+                  >
+                    <div className="input-group">
+                      <label className="input-label">Atleta Executor</label>
+                      <select name="jogador" className="input-field" required>
+                        <option value="">Selecione o jogador do Mandante...</option>
+                        {players.filter(p => p.time_id === activeLiveMatch.time_casa_id || !p.time_id).map(p => (
+                          <option key={p.id} value={p.id}>
+                            #{p.numero_camisa || 'S/N'} - {p.apelido || p.nome_completo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label className="input-label">Ocorrência</label>
+                        <select name="tipo" className="input-field" required>
+                          <option value="gol">⚽ Gol Marcado</option>
+                          <option value="assistencia">👟 Assistência</option>
+                          <option value="cartao_amarelo">🟨 Cartão Amarelo</option>
+                          <option value="cartao_vermelho">🟥 Cartão Vermelho</option>
+                          <option value="mvp">⭐ Craque do Jogo (MVP)</option>
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label className="input-label">Minuto do Jogo</label>
+                        <input type="number" name="minuto" className="input-field" min="0" max="120" defaultValue={liveMinute} required />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }}>
+                      <Plus size={16} /> Registrar Evento para o Mandante
+                    </button>
+                  </form>
+                </div>
+
+                {/* Coluna do Time Visitante (Fora) */}
+                <div className="live-sumula-col fora">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ color: 'var(--secondary)' }}>🛡️ {activeLiveMatch.time_fora?.nome || activeLiveMatch.adversario} (Visitante)</h2>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Registrar ocorrência para o visitante</span>
+                  </div>
+
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const pId = e.target.jogador.value;
+                      const tipo = e.target.tipo.value;
+                      const min = e.target.minuto.value;
+                      await handleAddLiveEvent(activeLiveMatch.time_fora_id, pId, tipo, min);
+                      e.target.reset();
+                    }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+                  >
+                    <div className="input-group">
+                      <label className="input-label">Atleta Executor</label>
+                      <select name="jogador" className="input-field" required>
+                        <option value="">Selecione o jogador do Visitante...</option>
+                        {players.filter(p => p.time_id === activeLiveMatch.time_fora_id || !p.time_id).map(p => (
+                          <option key={p.id} value={p.id}>
+                            #{p.numero_camisa || 'S/N'} - {p.apelido || p.nome_completo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="input-group">
+                        <label className="input-label">Ocorrência</label>
+                        <select name="tipo" className="input-field" required>
+                          <option value="gol">⚽ Gol Marcado</option>
+                          <option value="assistencia">👟 Assistência</option>
+                          <option value="cartao_amarelo">🟨 Cartão Amarelo</option>
+                          <option value="cartao_vermelho">🟥 Cartão Vermelho</option>
+                          <option value="mvp">⭐ Craque do Jogo (MVP)</option>
+                        </select>
+                      </div>
+
+                      <div className="input-group">
+                        <label className="input-label">Minuto do Jogo</label>
+                        <input type="number" name="minuto" className="input-field" min="0" max="120" defaultValue={liveMinute} required />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-danger" style={{ width: '100%', marginTop: '10px' }}>
+                      <Plus size={16} /> Registrar Evento para o Visitante
+                    </button>
+                  </form>
+                </div>
+
+              </div>
+
+              {/* Rodapé: Timeline em Tempo Real consolidando todos os lances de ambos os lados */}
+              <div className="glass-panel" style={{ background: 'var(--bg-surface)' }}>
+                <h3 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Linha do Tempo Oficial da Partida</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '350px', overflowY: 'auto' }}>
+                  {matchEvents.map(ev => {
+                    const pl = players.find(p => p.id === ev.jogador_id);
+                    const tm = times.find(t => t.id === ev.time_id);
+                    return (
+                      <div 
+                        key={ev.id} 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          padding: '12px 20px', 
+                          background: 'rgba(255,255,255,0.02)', 
+                          borderRadius: '8px', 
+                          borderLeft: tm?.id === activeLiveMatch.time_casa_id ? '4px solid var(--primary)' : '4px solid var(--secondary)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <span style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-muted)' }}>{ev.minuto}'</span>
+                          <div>
+                            <strong style={{ fontSize: '1rem', color: '#fff', textTransform: 'uppercase' }}>
+                              {ev.tipo_evento === 'gol' ? '⚽ GOL!' : ev.tipo_evento === 'assistencia' ? '👟 ASSISTÊNCIA' : ev.tipo_evento === 'cartao_amarelo' ? '🟨 CARTÃO AMARELO' : ev.tipo_evento === 'cartao_vermelho' ? '🟥 CARTÃO VERMELHO' : '⭐ MVP'}
+                            </strong>
+                            <span style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {pl?.apelido || pl?.nome_completo || 'Atleta'} ({tm?.nome || 'Time'})
+                            </span>
+                          </div>
+                        </div>
+
+                        <button onClick={() => handleDeleteLiveEvent(ev.id)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', color: 'var(--secondary)' }}>
+                          Remover Lance
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {matchEvents.length === 0 && (
+                    <p className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>Aguardando o primeiro lance do jogo...</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 

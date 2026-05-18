@@ -14,17 +14,18 @@ router = APIRouter(prefix="/jogos", tags=["Partidas & Súmulas"])
 @router.get("", response_model=List[Jogo])
 async def listar_partidas():
     """
-    Retorna a lista de todas as partidas agendadas, em andamento ou finalizadas.
+    Retorna a lista de todas as partidas agendadas, em andamento ou finalizadas
+    com os detalhes dos times integrados.
     """
-    res = supabase.table("jogos").select("*").order("data_hora", desc=True).execute()
+    res = supabase.table("jogos").select("*, time_casa:times!time_casa_id(*), time_fora:times!time_fora_id(*)").order("data_hora", desc=True).execute()
     return res.data
 
 @router.get("/{jogo_id}", response_model=Jogo)
 async def obter_detalhes_partida(jogo_id: UUID):
     """
-    Retorna os detalhes de uma partida específica.
+    Retorna os detalhes de uma partida específica com times integrados.
     """
-    res = supabase.table("jogos").select("*").eq("id", str(jogo_id)).execute()
+    res = supabase.table("jogos").select("*, time_casa:times!time_casa_id(*), time_fora:times!time_fora_id(*)").eq("id", str(jogo_id)).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Partida não encontrada.")
     return res.data[0]
@@ -35,7 +36,7 @@ async def criar_partida(
     current_user: dict = Depends(check_active_player)
 ):
     """
-    Agenda uma nova partida contra um adversário (Apenas Admins/Analistas).
+    Agenda uma nova partida selecionando os times (Apenas Admins/Analistas).
     """
     if current_user["role"] not in ["admin", "analista"]:
         raise HTTPException(
@@ -46,10 +47,20 @@ async def criar_partida(
     novo_jogo = jogo.model_dump()
     novo_jogo["data_hora"] = novo_jogo["data_hora"].isoformat()
     
+    # Preencher nome do adversário para compatibilidade caso não preenchido
+    if not novo_jogo.get("adversario") and novo_jogo.get("time_fora_id"):
+        # Buscar nome do time de fora para servir como adversario textual
+        time_fora = supabase.table("times").select("nome").eq("id", str(novo_jogo["time_fora_id"])).execute()
+        if time_fora.data:
+            novo_jogo["adversario"] = time_fora.data[0]["nome"]
+            
     res = supabase.table("jogos").insert(novo_jogo).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Erro ao criar partida.")
-    return res.data[0]
+        
+    # Recarregar detalhes para retornar o schema aninhado correto
+    reloaded = supabase.table("jogos").select("*, time_casa:times!time_casa_id(*), time_fora:times!time_fora_id(*)").eq("id", str(res.data[0]["id"])).execute()
+    return reloaded.data[0]
 
 @router.put("/{jogo_id}", response_model=Jogo)
 async def atualizar_partida(
@@ -74,7 +85,38 @@ async def atualizar_partida(
     res = supabase.table("jogos").update(dados).eq("id", str(jogo_id)).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Erro ao atualizar dados da partida.")
-    return res.data[0]
+        
+    # Recarregar detalhes para retornar o schema aninhado correto
+    reloaded = supabase.table("jogos").select("*, time_casa:times!time_casa_id(*), time_fora:times!time_fora_id(*)").eq("id", str(jogo_id)).execute()
+    return reloaded.data[0]
+
+@router.post("/{jogo_id}/iniciar", response_model=Jogo)
+async def iniciar_partida(
+    jogo_id: UUID,
+    current_user: dict = Depends(check_active_player)
+):
+    """
+    Inicia o cronômetro oficial do jogo (Apenas Admins/Analistas).
+    """
+    if current_user["role"] not in ["admin", "analista"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas a comissão técnica pode iniciar a partida."
+        )
+        
+    import datetime
+    agora = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    
+    res = supabase.table("jogos").update({
+        "status": "em_andamento",
+        "inicio_cronometro": agora
+    }).eq("id", str(jogo_id)).execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Erro ao iniciar partida.")
+        
+    jogo_completo = supabase.table("jogos").select("*, time_casa:times!time_casa_id(*), time_fora:times!time_fora_id(*)").eq("id", str(jogo_id)).execute()
+    return jogo_completo.data[0]
 
 # ==========================================
 # ROTAS DE SÚMULA / EVENTOS
@@ -99,7 +141,7 @@ async def registrar_evento_partida(
 ):
     """
     Registra um lance na súmula da partida (Gol, Assistência, Cartão, MVP) (Apenas Admins/Analistas).
-    Se for cartão amarelo/vermelho, o trigger do banco cria a suspensão automática no próximo jogo.
+    Ao registrar um gol, recalcula e atualiza o placar oficial do jogo automaticamente.
     """
     if current_user["role"] not in ["admin", "analista"]:
         raise HTTPException(
@@ -122,15 +164,35 @@ async def registrar_evento_partida(
                 detail="Ação Inválida! Este jogador está suspenso para esta partida por disciplina."
             )
             
+    # Obter os dados atuais do jogo para atualizar gols se for gol
+    jogo_res = supabase.table("jogos").select("time_casa_id, time_fora_id, gols_pro, gols_contra").eq("id", str(jogo_id)).execute()
+    if not jogo_res.data:
+        raise HTTPException(status_code=404, detail="Partida não encontrada.")
+    partida = jogo_res.data[0]
+
     novo_evento = evento.model_dump()
     novo_evento["jogo_id"] = str(novo_evento["jogo_id"])
     if novo_evento["jogador_id"]:
         novo_evento["jogador_id"] = str(novo_evento["jogador_id"])
+    if novo_evento["time_id"]:
+        novo_evento["time_id"] = str(novo_evento["time_id"])
         
     res = supabase.table("eventos_partida").insert(novo_evento).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Erro ao registrar evento na súmula.")
-    return res.data[0]
+        
+    # Lógica de autoincremento de gols do placar
+    if evento.tipo_evento == "gol" and evento.time_id:
+        if str(evento.time_id) == str(partida["time_casa_id"]):
+            novos_gols = (partida["gols_pro"] or 0) + 1
+            supabase.table("jogos").update({"gols_pro": novos_gols}).eq("id", str(jogo_id)).execute()
+        elif str(evento.time_id) == str(partida["time_fora_id"]):
+            novos_gols = (partida["gols_contra"] or 0) + 1
+            supabase.table("jogos").update({"gols_contra": novos_gols}).eq("id", str(jogo_id)).execute()
+
+    # Recarregar para garantir perfis aninhados
+    reloaded_ev = supabase.table("eventos_partida").select("*, perfis(*)").eq("id", str(res.data[0]["id"])).execute()
+    return reloaded_ev.data[0]
 
 @router.delete("/eventos/{evento_id}")
 async def deletar_evento_partida(
@@ -139,6 +201,7 @@ async def deletar_evento_partida(
 ):
     """
     Remove um evento da súmula da partida (Apenas Admins/Analistas).
+    Ao remover um gol, subtrai o gol do placar oficial do jogo correspondente.
     """
     if current_user["role"] not in ["admin", "analista"]:
         raise HTTPException(
@@ -146,9 +209,28 @@ async def deletar_evento_partida(
             detail="Apenas a comissão técnica pode remover eventos da súmula."
         )
         
+    # Obter dados do evento antes de deletar
+    ev_res = supabase.table("eventos_partida").select("*").eq("id", str(evento_id)).execute()
+    if not ev_res.data:
+        raise HTTPException(status_code=404, detail="Evento não encontrado.")
+    ev = ev_res.data[0]
+    
     res = supabase.table("eventos_partida").delete().eq("id", str(evento_id)).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Erro ao deletar evento.")
+        
+    # Lógica de autodecremento de gols do placar
+    if ev["tipo_evento"] == "gol" and ev["time_id"]:
+        jogo_res = supabase.table("jogos").select("time_casa_id, time_fora_id, gols_pro, gols_contra").eq("id", str(ev["jogo_id"])).execute()
+        if jogo_res.data:
+            partida = jogo_res.data[0]
+            if str(ev["time_id"]) == str(partida["time_casa_id"]):
+                novos_gols = max(0, (partida["gols_pro"] or 0) - 1)
+                supabase.table("jogos").update({"gols_pro": novos_gols}).eq("id", str(ev["jogo_id"])).execute()
+            elif str(ev["time_id"]) == str(partida["time_fora_id"]):
+                novos_gols = max(0, (partida["gols_contra"] or 0) - 1)
+                supabase.table("jogos").update({"gols_contra": novos_gols}).eq("id", str(ev["jogo_id"])).execute()
+                
     return {"status": "sucesso", "mensagem": "Evento removido da súmula."}
 
 @router.get("/{jogo_id}/confirmacoes")

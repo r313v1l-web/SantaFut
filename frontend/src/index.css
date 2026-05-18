@@ -196,6 +196,27 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 10px rgba(57, 255, 20, 0.1);
 }
 
+/* Fix: Select dropdowns e options precisam de fundo escuro e texto legível */
+select.input-field {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2339ff14' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+select.input-field option {
+  background: #1a1d24;
+  color: #e0e0e0;
+  padding: 10px;
+}
+select.input-field option:checked {
+  background: #2a2d34;
+  color: #39ff14;
+}
+
 /* Containers com Glassmorphism */
 .glass-panel {
   background: var(--bg-surface);
@@ -565,3 +586,251 @@ h1, h2, h3, h4, h5, h6 {
     padding: 20px;
   }
 }
+
+/* ==========================================================================
+   CALENDÁRIO INTERATIVO MENSAL & SÚMULA PREMIUM
+   ========================================================================== */
+.calendar-container {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 30px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.calendar-nav-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-fast);
+}
+.calendar-nav-btn:hover {
+  background: var(--primary);
+  color: var(--text-dark);
+  border-color: transparent;
+  box-shadow: var(--shadow-neon);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.calendar-day {
+  min-height: 100px;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: var(--transition-fast);
+  cursor: pointer;
+}
+.calendar-day.empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+.calendar-day:not(.empty):hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(57, 255, 20, 0.05);
+}
+.calendar-day.has-match {
+  background: rgba(57, 255, 20, 0.02);
+  border-color: rgba(57, 255, 20, 0.15);
+}
+.calendar-day.has-match:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 15px rgba(57, 255, 20, 0.15);
+}
+
+.day-number {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.calendar-day.has-match .day-number {
+  color: var(--primary);
+}
+
+.match-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.match-badge-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.match-badge-pill.agendado {
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(57, 255, 20, 0.2);
+}
+.match-badge-pill.em_andamento {
+  background: rgba(255, 0, 127, 0.15);
+  color: var(--secondary);
+  border: 1px solid rgba(255, 0, 127, 0.3);
+  animation: pulse-border 1.5s infinite alternate;
+}
+.match-badge-pill.finalizado {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.live-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--secondary);
+  border-radius: 50%;
+  animation: pulse-ring 1.2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.5; }
+}
+
+@keyframes pulse-border {
+  from { border-color: rgba(255, 0, 127, 0.3); }
+  to { border-color: rgba(255, 0, 127, 0.8); box-shadow: 0 0 8px rgba(255, 0, 127, 0.3); }
+}
+
+/* Painel de Súmula Ao Vivo */
+.live-sumula-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.98);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.live-sumula-container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.live-sumula-header {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.live-sumula-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 12px 24px;
+  min-width: 150px;
+}
+
+.pulse-timer {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--primary);
+  text-shadow: 0 0 10px var(--primary-glow);
+  letter-spacing: 0.05em;
+}
+.pulse-timer.live {
+  color: var(--secondary);
+  text-shadow: 0 0 10px var(--secondary-glow);
+  animation: pulse-ring 1.5s infinite;
+}
+
+.live-sumula-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex-grow: 1;
+}
+
+.live-sumula-col {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.live-sumula-col.casa {
+  border-left: 4px solid var(--primary);
+}
+
+.live-sumula-col.fora {
+  border-left: 4px solid var(--secondary);
+}
+
+@media (max-width: 768px) {
+  .live-sumula-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
