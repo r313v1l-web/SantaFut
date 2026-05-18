@@ -23,6 +23,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+
+# Capturador de Exceções Global para Depuração Premium
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erro interno no servidor",
+            "error_type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc()
+        }
+    )
+
 # Inclusão dos Roteadores da API
 app.include_router(auth_router)
 app.include_router(jogadores_router)
