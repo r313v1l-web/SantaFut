@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import auth, jogadores, jogos, suspensoes, bolao
+from app.routers import auth, jogadores, jogos, suspensoes, bolao, times
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -19,14 +19,12 @@ app.add_middleware(
 )
 
 # Inclusão dos Roteadores da API
-from app.routers.times import router as times_router
-
 app.include_router(auth.router)
 app.include_router(jogadores.router)
 app.include_router(jogos.router)
 app.include_router(suspensoes.router)
 app.include_router(bolao.router)
-app.include_router(times_router)
+app.include_router(times.router)
 
 @app.get("/")
 async def root():
