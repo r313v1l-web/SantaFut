@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Award, User, LogOut, Calendar, Trophy, Users, 
   Settings, CheckSquare, Plus, Trash2, ShieldAlert, 
-  TrendingUp, Dribbble, FileText, CheckCircle2, UserX
+  TrendingUp, RotateCw, FileText, CheckCircle2, UserX
 } from 'lucide-react';
 import { supabase, api } from './services/api';
 import AthleteCard from './components/AthleteCard';
@@ -397,7 +397,7 @@ export default function App() {
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '20px' }}>
-        <Dribbble className="animate-spin text-primary" size={50} style={{ color: '#39ff14' }} />
+        <RotateCw className="animate-spin text-primary" size={50} style={{ color: '#39ff14' }} />
         <p className="text-muted" style={{ fontSize: '1.2rem', fontFamily: 'Outfit' }}>Carregando SantaFut...</p>
       </div>
     );
