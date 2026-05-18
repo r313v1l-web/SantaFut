@@ -44,6 +44,27 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  // Upload de imagem para o Supabase Storage
+  uploadImage: async (file, bucket = 'avatars', folder = '') => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${folder ? folder + '/' : ''}${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+    
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, { 
+        cacheControl: '3600', 
+        upsert: false 
+      });
+    
+    if (error) throw new Error('Erro ao fazer upload da imagem: ' + error.message);
+    
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
+    
+    return urlData.publicUrl;
+  },
+
   // Perfis
   getMe: () => request('/perfis/me'),
   acceptRegulation: () => request('/perfis/aceitar-regulamento', { method: 'POST' }),
@@ -137,3 +158,4 @@ export const api = {
   }),
   getPredictionsLeaderboard: () => request('/bolao/ranking'),
 };
+

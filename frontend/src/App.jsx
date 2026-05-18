@@ -520,13 +520,22 @@ export default function App() {
       return;
     }
     try {
+      let escudoFinalUrl = newTeamEscudo || null;
+      
+      // Se um arquivo de imagem foi selecionado, faz upload para o Supabase Storage
+      const fileInput = e.target.querySelector('input[type="file"]');
+      if (fileInput && fileInput.files.length > 0) {
+        escudoFinalUrl = await api.uploadImage(fileInput.files[0], 'avatars', 'escudos');
+      }
+      
       await api.createTeam({
         nome: newTeamName,
-        escudo_url: newTeamEscudo || null
+        escudo_url: escudoFinalUrl
       });
       alert("Time cadastrado com sucesso!");
       setNewTeamName('');
       setNewTeamEscudo('');
+      if (fileInput) fileInput.value = '';
       carregarDadosTab('admin');
     } catch (err) {
       alert("Erro ao cadastrar time: " + err.message);
@@ -1641,9 +1650,8 @@ export default function App() {
                       e.preventDefault();
                       const pId = e.target.jogador.value;
                       const tipo = e.target.tipo.value;
-                      const min = e.target.minuto.value;
-                      await handleAddLiveEvent(activeLiveMatch.time_casa_id, pId, tipo, min);
-                      e.target.reset();
+                      await handleAddLiveEvent(activeLiveMatch.time_casa_id, pId, tipo, liveMinute);
+                      e.target.jogador.value = '';
                     }}
                     style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
                   >
@@ -1659,7 +1667,7 @@ export default function App() {
                       </select>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px' }}>
                       <div className="input-group">
                         <label className="input-label">Ocorrência</label>
                         <select name="tipo" className="input-field" required>
@@ -1672,8 +1680,10 @@ export default function App() {
                       </div>
 
                       <div className="input-group">
-                        <label className="input-label">Minuto do Jogo</label>
-                        <input type="number" name="minuto" className="input-field" min="0" max="120" defaultValue={liveMinute} required />
+                        <label className="input-label">Minuto</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '48px', padding: '0 16px', background: 'rgba(57, 255, 20, 0.08)', border: '1px solid rgba(57, 255, 20, 0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--primary)', fontWeight: '900', fontSize: '1.2rem', letterSpacing: '0.05em', minWidth: '70px' }}>
+                          {liveMinute}'
+                        </div>
                       </div>
                     </div>
 
@@ -1695,9 +1705,8 @@ export default function App() {
                       e.preventDefault();
                       const pId = e.target.jogador.value;
                       const tipo = e.target.tipo.value;
-                      const min = e.target.minuto.value;
-                      await handleAddLiveEvent(activeLiveMatch.time_fora_id, pId, tipo, min);
-                      e.target.reset();
+                      await handleAddLiveEvent(activeLiveMatch.time_fora_id, pId, tipo, liveMinute);
+                      e.target.jogador.value = '';
                     }}
                     style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
                   >
@@ -1713,7 +1722,7 @@ export default function App() {
                       </select>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px' }}>
                       <div className="input-group">
                         <label className="input-label">Ocorrência</label>
                         <select name="tipo" className="input-field" required>
@@ -1726,8 +1735,10 @@ export default function App() {
                       </div>
 
                       <div className="input-group">
-                        <label className="input-label">Minuto do Jogo</label>
-                        <input type="number" name="minuto" className="input-field" min="0" max="120" defaultValue={liveMinute} required />
+                        <label className="input-label">Minuto</label>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '48px', padding: '0 16px', background: 'rgba(255, 0, 127, 0.08)', border: '1px solid rgba(255, 0, 127, 0.2)', borderRadius: 'var(--radius-sm)', color: 'var(--secondary)', fontWeight: '900', fontSize: '1.2rem', letterSpacing: '0.05em', minWidth: '70px' }}>
+                          {liveMinute}'
+                        </div>
                       </div>
                     </div>
 
@@ -1989,14 +2000,25 @@ export default function App() {
                 <h3>Gerenciar Times & Escudos</h3>
               </div>
               
-              <form onSubmit={handleCreateTeam} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '16px', alignItems: 'flex-end', marginBottom: '24px' }}>
-                <div className="input-group">
-                  <label className="input-label">Nome do Time</label>
-                  <input type="text" className="input-field" placeholder="Ex: SantaFut Principal" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} required />
+              <form onSubmit={handleCreateTeam} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="input-group">
+                    <label className="input-label">Nome do Time</label>
+                    <input type="text" className="input-field" placeholder="Ex: SantaFut Principal" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} required />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">📁 Upload do Escudo/Logo</label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="input-field" 
+                      style={{ padding: '10px', cursor: 'pointer' }}
+                    />
+                  </div>
                 </div>
                 <div className="input-group">
-                  <label className="input-label">URL do Escudo/Logo</label>
-                  <input type="text" className="input-field" placeholder="Ex: https://link.com/imagem.png" value={newTeamEscudo} onChange={e => setNewTeamEscudo(e.target.value)} />
+                  <label className="input-label" style={{ fontSize: '0.7rem' }}>Ou cole uma URL direta (opcional)</label>
+                  <input type="text" className="input-field" placeholder="Ex: https://link.com/imagem.png" value={newTeamEscudo} onChange={e => setNewTeamEscudo(e.target.value)} style={{ padding: '10px', fontSize: '0.85rem' }} />
                 </div>
                 <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 24px' }}>
                   Criar Time
@@ -2093,7 +2115,30 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* Botão de Upload de Foto do Jogador */}
+                        <label 
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(57, 255, 20, 0.1)', border: '1px solid rgba(57, 255, 20, 0.2)', borderRadius: '4px', cursor: 'pointer', color: 'var(--primary)', fontWeight: '600' }}
+                        >
+                          📷 Foto
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            style={{ display: 'none' }}
+                            onChange={async (e) => {
+                              if (!e.target.files.length) return;
+                              try {
+                                const url = await api.uploadImage(e.target.files[0], 'avatars', 'jogadores');
+                                await api.updateProfileByAdmin(p.id, { avatar_url: url });
+                                alert('Foto do jogador atualizada com sucesso!');
+                                carregarDadosTab('admin');
+                              } catch (err) {
+                                alert('Erro ao enviar foto: ' + err.message);
+                              }
+                            }}
+                          />
+                        </label>
+
                         {p.id !== profile.id && (
                           <>
                             <button onClick={() => handleDeleteProfile(p.id)} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', color: 'var(--secondary)' }}>
