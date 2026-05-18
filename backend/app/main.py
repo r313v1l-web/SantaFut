@@ -19,11 +19,14 @@ app.add_middleware(
 )
 
 # Inclusão dos Roteadores da API
+from app.routers.times import router as times_router
+
 app.include_router(auth.router)
 app.include_router(jogadores.router)
 app.include_router(jogos.router)
 app.include_router(suspensoes.router)
 app.include_router(bolao.router)
+app.include_router(times_router)
 
 @app.get("/")
 async def root():

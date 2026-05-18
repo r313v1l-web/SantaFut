@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.database import supabase
-from app.routers.auth import check_active_player
+from app.routers.auth import check_active_player, get_current_user
 from app.schemas import Jogo, JogoCreate, JogoUpdate, EventoPartida, EventoPartidaCreate
 from typing import List, Dict, Any
 from uuid import UUID
@@ -150,3 +150,42 @@ async def deletar_evento_partida(
     if not res.data:
         raise HTTPException(status_code=400, detail="Erro ao deletar evento.")
     return {"status": "sucesso", "mensagem": "Evento removido da súmula."}
+
+@router.get("/{jogo_id}/confirmacoes")
+async def obter_confirmacoes_partida(jogo_id: UUID):
+    """
+    Retorna a lista de todos os perfis de jogadores que confirmaram presença para a partida.
+    """
+    res = supabase.table("confirmacoes_jogo").select(
+        "*, perfis(id, nome_completo, apelido, avatar_url, role, time_id)"
+    ).eq("jogo_id", str(jogo_id)).eq("confirmado", True).execute()
+    return res.data
+
+@router.post("/{jogo_id}/confirmar")
+async def confirmar_presenca_partida(
+    jogo_id: UUID,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Marca a confirmação de presença do jogador autenticado no jogo correspondente.
+    """
+    confirmacao = {
+        "jogo_id": str(jogo_id),
+        "jogador_id": str(current_user["id"]),
+        "confirmado": True
+    }
+    res = supabase.table("confirmacoes_jogo").upsert(confirmacao, on_conflict="jogo_id,jogador_id").execute()
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Não foi possível confirmar presença.")
+    return res.data[0]
+
+@router.post("/{jogo_id}/cancelar")
+async def cancelar_presenca_partida(
+    jogo_id: UUID,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Remove a confirmação de presença do jogador autenticado no jogo correspondente.
+    """
+    res = supabase.table("confirmacoes_jogo").delete().eq("jogo_id", str(jogo_id)).eq("jogador_id", str(current_user["id"])).execute()
+    return {"status": "sucesso", "mensagem": "Presença cancelada."}

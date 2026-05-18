@@ -14,6 +14,7 @@ class PerfilBase(BaseModel):
     posicao: Optional[str] = None
     avatar_url: Optional[str] = None
     role: Optional[str] = "jogador"
+    time_id: Optional[UUID] = None
 
 class PerfilUpdate(BaseModel):
     nome_completo: Optional[str] = None
@@ -23,6 +24,7 @@ class PerfilUpdate(BaseModel):
     avatar_url: Optional[str] = None
     aceitou_regulamento: Optional[bool] = None
     banido: Optional[bool] = None
+    time_id: Optional[UUID] = None
     # Atributos do FUT Card
     ritmo: Optional[int] = Field(None, ge=0, le=99)
     finalizacao: Optional[int] = Field(None, ge=0, le=99)
@@ -132,3 +134,37 @@ class TabelaBolao(BaseModel):
     apelido: Optional[str] = None
     total_pontos: int
     total_palpites: int
+
+# ==========================================
+# SCHEMAS DE TIMES
+# ==========================================
+
+class TimeBase(BaseModel):
+    nome: str
+    escudo_url: Optional[str] = None
+
+class TimeCreate(TimeBase):
+    pass
+
+class Time(TimeBase):
+    id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# SCHEMAS DE CONFIRMAÇÕES DE JOGO
+# ==========================================
+
+class ConfirmacaoJogoCreate(BaseModel):
+    jogo_id: UUID
+    jogador_id: UUID
+    confirmado: Optional[bool] = True
+
+class ConfirmacaoJogo(ConfirmacaoJogoCreate):
+    id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
