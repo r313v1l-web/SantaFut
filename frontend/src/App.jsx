@@ -250,6 +250,7 @@ export default function App() {
       setNewAdv('');
       setNewData('');
       setNewLocal('');
+      setSelectedMatch(null);
       carregarDadosTab('sumulas');
     } catch (err) {
       alert(err.message);
