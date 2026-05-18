@@ -7,8 +7,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder-a
 // Inicialização do cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// URL Base do Backend FastAPI
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+// URL Base do Backend FastAPI (limpa barras duplicadas no final se houver)
+let API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+if (API_BASE_URL.endsWith('/')) {
+  API_BASE_URL = API_BASE_URL.slice(0, -1);
+}
 
 /**
  * Função utilitária para fazer requisições HTTP autenticadas para o backend FastAPI.
