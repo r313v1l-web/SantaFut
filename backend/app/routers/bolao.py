@@ -61,7 +61,7 @@ async def obter_ranking_bolao():
     # Busca todos os perfis ativos
     perfis_res = supabase.table("perfis").select("id, nome_completo, apelido").eq("banido", False).execute()
     # Busca todos os palpites que já possuem pontos calculados
-    palpites_res = supabase.table("bolao_palpites").select("usuario_id, pontos_obtidos").filter("pontos_obtidos", "not.is.null").execute()
+    palpites_res = supabase.table("bolao_palpites").select("usuario_id, pontos_obtidos").not_.is_("pontos_obtidos", "null").execute()
     
     # Monta a estrutura em Python para somar os pontos por jogador de forma rápida
     dados_ranking = {}
